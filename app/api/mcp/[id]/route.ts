@@ -77,9 +77,18 @@ async function handle(req: Request, ctx: Ctx): Promise<Response> {
   }
 }
 
-export const GET = handle;
 export const POST = handle;
-export const DELETE = handle;
+
+/**
+ * Serveur sans état : pas de flux SSE (GET) ni de session à fermer (DELETE).
+ * Répondre 405 indique au client de ne pas ouvrir de flux ; sinon il se
+ * reconnecterait en boucle, chaque tentative coûtant une exécution serverless.
+ */
+function methodNotAllowed() {
+  return rpcError(405, "Méthode non prise en charge : ce serveur MCP sans état n'accepte que POST.", { Allow: "POST, OPTIONS" });
+}
+export const GET = methodNotAllowed;
+export const DELETE = methodNotAllowed;
 
 export function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
