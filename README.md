@@ -7,7 +7,7 @@ Une interface web permet d'enregistrer des connexions, de les tester et d'obteni
 ## Fonctionnement
 
 ```
- Interface d'administration ──▶ Registre (Redis) : connexions chiffrées (AES-256-GCM)
+ Interface web ──────────────▶ Stockage (MongoDB Atlas) : connexions chiffrées (AES-256-GCM)
                                          │
  URL MCP : https://…/api/mcp/<id>        │  (l'identifiant n'est pas un secret)
                                          ▼
@@ -80,11 +80,11 @@ Les résultats sont limités à « Lignes max. par réponse » (200 par défaut,
 
 ```bash
 npm install
-cp .env.example .env.local   # renseignez ENCRYPTION_KEY et ADMIN_PASSWORD (REDIS_URL facultatif en local)
+cp .env.example .env.local   # renseignez ENCRYPTION_KEY et ADMIN_PASSWORD (MONGODB_URI facultatif en local)
 npm run dev                   # http://localhost:3000, identifiant « admin »
 ```
 
-Sans `REDIS_URL`, le stockage se fait en mémoire et se vide à chaque redémarrage. Pour un Redis local : `docker run -d -p 6379:6379 redis:7-alpine` puis `REDIS_URL=redis://localhost:6379`.
+Sans `MONGODB_URI`, le stockage se fait en mémoire et se vide à chaque redémarrage. Pour un MongoDB local : `docker run -d -p 27017:27017 mongo:8` puis `MONGODB_URI=mongodb://localhost:27017`.
 
 Pour générer une clé :
 
@@ -103,26 +103,28 @@ Pour tester sans assistant, lancez `npx @modelcontextprotocol/inspector` : trans
 | `ENCRYPTION_KEY` | oui | Chiffrement des paramètres de connexion stockés (32 caractères aléatoires ou plus recommandés). **La changer rend illisibles les connexions enregistrées.** |
 | `ADMIN_PASSWORD` | oui | Mot de passe du compte administrateur. Choisissez-le long. |
 | `ADMIN_EMAIL` | non | Identifiant de connexion de l'administrateur (« admin » par défaut). |
-| `REDIS_URL` (ou `KV_URL`) | oui en production | Redis de stockage : connexions, comptes utilisateurs, jetons OAuth. |
+| `MONGODB_URI` | oui en production | Stockage du serveur : connexions, comptes utilisateurs, jetons OAuth (MongoDB Atlas recommandé). |
+| `MONGODB_DB` | non | Base utilisée dans le cluster (« mcp_server » par défaut). |
+| `REDIS_URL` (ou `KV_URL`) | non | Alternative à MongoDB, utilisée seulement si `MONGODB_URI` est vide. |
 | `PUBLIC_BASE_URL` | non | URL publique, utile avec un domaine personnalisé ou derrière un proxy. |
 
-### Redis de stockage (Upstash, offre gratuite)
+### Stockage : MongoDB Atlas (offre gratuite M0)
 
-- **Vercel** : **Storage → Create Database → Upstash for Redis**, puis liez-la au projet. `REDIS_URL` / `KV_URL` sont ajoutées automatiquement.
-- **Netlify ou autre** : créez une base sur [console.upstash.com](https://console.upstash.com), copiez l'URL `rediss://…` (onglet *Connect*, protocole Redis/TCP), puis ajoutez-la en `REDIS_URL`.
+- **Vercel** : **Integrations → MongoDB Atlas** (ou *Storage → Create Database → MongoDB Atlas*), puis connecte le cluster au projet. La variable `MONGODB_URI` est ajoutée automatiquement et l'accès réseau est configuré.
+- **Manuellement** (Netlify ou autre) : sur [cloud.mongodb.com](https://cloud.mongodb.com), crée un cluster M0 et un utilisateur de base dans *Database Access*. Dans *Network Access*, autorise `0.0.0.0/0`, car les IP de Vercel et Netlify sont dynamiques. Copie ensuite la chaîne `mongodb+srv://…` (*Connect → Drivers*) dans `MONGODB_URI`.
 
-N'importe quel Redis 6.2+ accessible depuis Internet convient (Redis Cloud, Aiven…).
+Le serveur crée tout seul la collection `kv` et son index d'expiration (TTL) dans la base `mcp_server`. Tu peux consulter les données avec MongoDB Compass ou le *Data Explorer* d'Atlas.
 
 ### Vercel
 
 1. Sur [vercel.com/new](https://vercel.com/new), importez le dépôt. Next.js est détecté automatiquement.
-2. Ajoutez la base Upstash (voir ci-dessus), puis `ENCRYPTION_KEY` et `ADMIN_PASSWORD` dans **Settings → Environment Variables**.
+2. Ajoutez MongoDB Atlas (voir ci-dessus), puis `ENCRYPTION_KEY` et `ADMIN_PASSWORD` dans **Settings → Environment Variables**.
 3. Redéployez.
 
 ### Netlify
 
 1. Sur [app.netlify.com](https://app.netlify.com), choisissez **Add new site → Import an existing project**. Le fichier `netlify.toml` et le runtime Next.js sont pris en charge.
-2. Dans **Site configuration → Environment variables**, ajoutez `ENCRYPTION_KEY`, `ADMIN_PASSWORD` et `REDIS_URL`.
+2. Dans **Site configuration → Environment variables**, ajoutez `ENCRYPTION_KEY`, `ADMIN_PASSWORD` et `MONGODB_URI`.
 3. Redéployez.
 
 > Netlify limite par défaut la durée des fonctions synchrones à environ 10 s, contre 60 s configurées ici pour Vercel. Les requêtes longues peuvent donc expirer sur Netlify.
@@ -178,7 +180,7 @@ lib/
   oauth.ts                              Serveur d'autorisation OAuth
   auth.ts                               Authentification, sessions, protections
   users.ts                              Comptes utilisateurs, mots de passe, invitations
-  store.ts                              Stockage Redis (ou mémoire en développement)
+  store.ts                              Stockage MongoDB (ou Redis, ou mémoire en développement)
   crypto.ts                             Chiffrement, jetons, empreintes
   sql-guard.ts                          Garde-fou SQL pour la lecture seule
   mcp/server.ts                         Définition des outils MCP
