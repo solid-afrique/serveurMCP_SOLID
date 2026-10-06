@@ -48,6 +48,29 @@ export function parseConnection(input: unknown): ConnectionConfig {
   return connectionSchema.parse(cleaned);
 }
 
+const isEmpty = (v: unknown) => v === undefined || v === null || v === "";
+
+/**
+ * Lors d'une modification, les secrets ne sont pas renvoyés au navigateur :
+ * un mot de passe ou une chaîne de connexion laissés vides conservent la valeur enregistrée.
+ */
+export function withPreviousSecrets(input: unknown, previous: ConnectionConfig): Record<string, unknown> {
+  const raw = { ...((input ?? {}) as Record<string, unknown>) };
+  if (isEmpty(raw.connectionString) && isEmpty(raw.host) && previous.connectionString) {
+    raw.connectionString = previous.connectionString;
+  }
+  if (isEmpty(raw.connectionString) && isEmpty(raw.password) && previous.password) {
+    raw.password = previous.password;
+  }
+  return raw;
+}
+
+/** Configuration renvoyée à l'interface d'administration, sans aucun secret. */
+export function publicConfig(cfg: ConnectionConfig) {
+  const { password, connectionString, ...rest } = cfg;
+  return { ...rest, hasPassword: Boolean(password), hasConnectionString: Boolean(connectionString) };
+}
+
 export function displayName(cfg: ConnectionConfig): string {
   return cfg.name || `${DB_LABELS[cfg.type]}${cfg.database ? ` (${cfg.database})` : ""}`;
 }
