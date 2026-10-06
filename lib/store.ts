@@ -1,9 +1,11 @@
 import Redis from "ioredis";
+import { MongoClient, type Collection } from "mongodb";
 
 /**
- * Stockage clé-valeur du serveur (connexions, clients OAuth, jetons).
- * Production : Redis via REDIS_URL (ou KV_URL fourni par l'intégration Upstash de Vercel).
- * Développement sans Redis : stockage en mémoire, perdu au redémarrage.
+ * Stockage clé-valeur du serveur (connexions, comptes, clients OAuth, jetons).
+ * - MongoDB (recommandé) : MONGODB_URI, par ex. un cluster MongoDB Atlas ;
+ * - Redis : REDIS_URL (ou KV_URL) ;
+ * - développement sans configuration : mémoire, perdue au redémarrage.
  */
 export interface Store {
   get(key: string): Promise<string | null>;
@@ -18,14 +20,105 @@ export interface Store {
   sismember(key: string, member: string): Promise<boolean>;
 }
 
-const PREFIX = "mcpdb:";
+export type StoreKind = "mongodb" | "redis" | "memory" | "missing";
 
-export function storeUrl(): string | undefined {
-  return process.env.REDIS_URL || process.env.KV_URL || undefined;
+export function storeKind(): StoreKind {
+  if (process.env.MONGODB_URI) return "mongodb";
+  if (process.env.REDIS_URL || process.env.KV_URL) return "redis";
+  return process.env.NODE_ENV === "production" ? "missing" : "memory";
 }
 
+/* -------------------------------- MongoDB -------------------------------- */
+
+interface KvDoc {
+  _id: string;
+  value?: string;
+  count?: number;
+  members?: string[];
+  expiresAt?: Date;
+}
+
+const expired = (d: KvDoc) => Boolean(d.expiresAt && d.expiresAt.getTime() <= Date.now());
+const valueOf = (d: KvDoc | null) => (!d || expired(d) ? null : (d.value ?? (d.count !== undefined ? String(d.count) : null)));
+const expiry = (ttl?: number) => (ttl ? { expiresAt: new Date(Date.now() + ttl * 1000) } : {});
+
+/**
+ * Une seule collection « kv » : { _id: clé, value | count | members, expiresAt }.
+ * L'index TTL purge les documents expirés (environ toutes les 60 s) ; l'expiration
+ * est donc aussi vérifiée à chaque lecture.
+ */
+class MongoStore implements Store {
+  private collection: Promise<Collection<KvDoc>>;
+
+  constructor(uri: string, dbName: string, onFailure: () => void) {
+    const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 10_000, appName: "mcp-db-server" });
+    this.collection = (async () => {
+      await client.connect();
+      const col = client.db(dbName).collection<KvDoc>("kv");
+      await col.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+      return col;
+    })();
+    // En cas d'échec de connexion, la requête suivante retentera avec un nouveau client.
+    this.collection.catch((e) => {
+      console.error("[store] MongoDB :", e.message);
+      onFailure();
+      client.close().catch(() => undefined);
+    });
+  }
+
+  async get(k: string) {
+    return valueOf(await (await this.collection).findOne({ _id: k }));
+  }
+  async mget(keys: string[]) {
+    if (!keys.length) return [];
+    const docs = await (await this.collection).find({ _id: { $in: keys } }).toArray();
+    const byId = new Map(docs.map((d) => [d._id, d]));
+    return keys.map((k) => valueOf(byId.get(k) ?? null));
+  }
+  async set(k: string, v: string, ttl?: number) {
+    await (await this.collection).replaceOne({ _id: k }, { value: v, ...expiry(ttl) }, { upsert: true });
+  }
+  async getdel(k: string) {
+    // Atomique : un code d'autorisation ou un jeton de rafraîchissement ne sert qu'une fois.
+    return valueOf(await (await this.collection).findOneAndDelete({ _id: k }));
+  }
+  async del(keys: string[]) {
+    if (keys.length) await (await this.collection).deleteMany({ _id: { $in: keys } });
+  }
+  async incr(k: string, ttl: number) {
+    const col = await this.collection;
+    await col.deleteOne({ _id: k, expiresAt: { $lte: new Date() } });
+    const doc = await col.findOneAndUpdate(
+      { _id: k },
+      { $inc: { count: 1 }, $setOnInsert: expiry(ttl) },
+      { upsert: true, returnDocument: "after" },
+    );
+    return doc?.count ?? 1;
+  }
+  async sadd(k: string, m: string) {
+    await (await this.collection).updateOne({ _id: k }, { $addToSet: { members: m } }, { upsert: true });
+  }
+  async srem(k: string, m: string) {
+    await (await this.collection).updateOne({ _id: k }, { $pull: { members: m } });
+  }
+  async smembers(k: string) {
+    return (await (await this.collection).findOne({ _id: k }))?.members ?? [];
+  }
+  async sismember(k: string, m: string) {
+    return (await (await this.collection).countDocuments({ _id: k, members: m }, { limit: 1 })) > 0;
+  }
+}
+
+/* --------------------------------- Redis --------------------------------- */
+
+const PREFIX = "mcpdb:";
+
 class RedisStore implements Store {
-  constructor(private client: Redis) {}
+  private client: Redis;
+  constructor(url: string) {
+    this.client = new Redis(url, { maxRetriesPerRequest: 2, connectTimeout: 10_000 });
+    this.client.on("error", (e) => console.error("[store] Redis :", e.message));
+  }
   get = (k: string) => this.client.get(PREFIX + k);
   mget = async (keys: string[]) => (keys.length ? this.client.mget(keys.map((k) => PREFIX + k)) : []);
   async set(k: string, v: string, ttl?: number) {
@@ -50,6 +143,8 @@ class RedisStore implements Store {
   smembers = (k: string) => this.client.smembers(PREFIX + k);
   sismember = async (k: string, m: string) => (await this.client.sismember(PREFIX + k, m)) === 1;
 }
+
+/* -------------------------------- Mémoire -------------------------------- */
 
 class MemoryStore implements Store {
   private data = new Map<string, { value: string | Set<string>; exp?: number }>();
@@ -106,21 +201,30 @@ class MemoryStore implements Store {
   }
 }
 
+/* --------------------------------- Choix --------------------------------- */
+
 // Réutilisé entre les invocations tant que la fonction serverless reste « chaude ».
 const globalStore = globalThis as unknown as { __mcpStore?: Store };
 
 export function getStore(): Store {
   if (globalStore.__mcpStore) return globalStore.__mcpStore;
-  const url = storeUrl();
-  if (url) {
-    const client = new Redis(url, { maxRetriesPerRequest: 2, connectTimeout: 10_000 });
-    client.on("error", (e) => console.error("[store] Redis :", e.message));
-    globalStore.__mcpStore = new RedisStore(client);
-  } else if (process.env.NODE_ENV !== "production") {
-    console.warn("[store] REDIS_URL absente : stockage en mémoire (développement uniquement).");
-    globalStore.__mcpStore = new MemoryStore();
-  } else {
-    throw new Error("La variable d'environnement REDIS_URL (ou KV_URL) est requise en production.");
+  switch (storeKind()) {
+    case "mongodb":
+      globalStore.__mcpStore = new MongoStore(
+        process.env.MONGODB_URI!,
+        process.env.MONGODB_DB || "mcp_server",
+        () => (globalStore.__mcpStore = undefined),
+      );
+      break;
+    case "redis":
+      globalStore.__mcpStore = new RedisStore((process.env.REDIS_URL || process.env.KV_URL)!);
+      break;
+    case "memory":
+      console.warn("[store] Ni MONGODB_URI ni REDIS_URL : stockage en mémoire (développement uniquement).");
+      globalStore.__mcpStore = new MemoryStore();
+      break;
+    case "missing":
+      throw new Error("La variable d'environnement MONGODB_URI (ou REDIS_URL) est requise en production.");
   }
-  return globalStore.__mcpStore;
+  return globalStore.__mcpStore!;
 }

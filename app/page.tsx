@@ -9,7 +9,7 @@ import UsersPanel from "./_components/UsersPanel";
 
 interface Session {
   actor: Actor | null;
-  configured: { encryptionKey: boolean; adminPassword: boolean; store: "redis" | "memory" | "missing" };
+  configured: { encryptionKey: boolean; adminPassword: boolean; store: "mongodb" | "redis" | "memory" | "missing" };
 }
 
 type Tab = "connections" | "users" | "account";
@@ -114,12 +114,12 @@ function ConfigBanners({ configured }: { configured: Session["configured"] }) {
       )}
       {configured.store === "missing" && (
         <div className="banner error">
-          <code>REDIS_URL</code> n’est pas configurée : comptes et connexions ne peuvent pas être enregistrés.
+          <code>MONGODB_URI</code> n’est pas configurée : comptes et connexions ne peuvent pas être enregistrés.
         </div>
       )}
       {configured.store === "memory" && (
         <div className="banner warn">
-          Stockage en mémoire (développement) : tout sera perdu au redémarrage. Définissez <code>REDIS_URL</code>.
+          Stockage en mémoire (développement) : tout sera perdu au redémarrage. Définissez <code>MONGODB_URI</code>.
         </div>
       )}
     </>

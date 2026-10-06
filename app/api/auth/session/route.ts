@@ -7,7 +7,7 @@ import {
   sameOrigin,
   sessionCookie,
 } from "@/lib/auth";
-import { storeUrl } from "@/lib/store";
+import { storeKind } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     configured: {
       encryptionKey: (process.env.ENCRYPTION_KEY?.length ?? 0) >= 16,
       adminPassword: adminConfigured(),
-      store: storeUrl() ? "redis" : process.env.NODE_ENV === "production" ? "missing" : "memory",
+      store: storeKind(),
     },
   });
 }
