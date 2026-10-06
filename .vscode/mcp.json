@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "boutique-locale": {
+      "type": "http",
+      "url": "http://localhost:3100/api/mcp/DHYF1smhL9pkOHn0"
+    }
+  }
+}
