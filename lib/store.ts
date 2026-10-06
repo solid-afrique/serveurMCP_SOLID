@@ -1,10 +1,8 @@
-import Redis from "ioredis";
 import { MongoClient, type Collection } from "mongodb";
 
 /**
  * Stockage clé-valeur du serveur (connexions, comptes, clients OAuth, jetons).
- * - MongoDB (recommandé) : MONGODB_URI, par ex. un cluster MongoDB Atlas ;
- * - Redis : REDIS_URL (ou KV_URL) ;
+ * - production : MongoDB via MONGODB_URI (par ex. un cluster MongoDB Atlas) ;
  * - développement sans configuration : mémoire, perdue au redémarrage.
  */
 export interface Store {
@@ -20,11 +18,10 @@ export interface Store {
   sismember(key: string, member: string): Promise<boolean>;
 }
 
-export type StoreKind = "mongodb" | "redis" | "memory" | "missing";
+export type StoreKind = "mongodb" | "memory" | "missing";
 
 export function storeKind(): StoreKind {
   if (process.env.MONGODB_URI) return "mongodb";
-  if (process.env.REDIS_URL || process.env.KV_URL) return "redis";
   return process.env.NODE_ENV === "production" ? "missing" : "memory";
 }
 
@@ -109,41 +106,6 @@ class MongoStore implements Store {
   }
 }
 
-/* --------------------------------- Redis --------------------------------- */
-
-const PREFIX = "mcpdb:";
-
-class RedisStore implements Store {
-  private client: Redis;
-  constructor(url: string) {
-    this.client = new Redis(url, { maxRetriesPerRequest: 2, connectTimeout: 10_000 });
-    this.client.on("error", (e) => console.error("[store] Redis :", e.message));
-  }
-  get = (k: string) => this.client.get(PREFIX + k);
-  mget = async (keys: string[]) => (keys.length ? this.client.mget(keys.map((k) => PREFIX + k)) : []);
-  async set(k: string, v: string, ttl?: number) {
-    if (ttl) await this.client.set(PREFIX + k, v, "EX", ttl);
-    else await this.client.set(PREFIX + k, v);
-  }
-  getdel = (k: string) => this.client.getdel(PREFIX + k);
-  async del(keys: string[]) {
-    if (keys.length) await this.client.del(...keys.map((k) => PREFIX + k));
-  }
-  async incr(k: string, ttl: number) {
-    const n = await this.client.incr(PREFIX + k);
-    if (n === 1) await this.client.expire(PREFIX + k, ttl);
-    return n;
-  }
-  async sadd(k: string, m: string) {
-    await this.client.sadd(PREFIX + k, m);
-  }
-  async srem(k: string, m: string) {
-    await this.client.srem(PREFIX + k, m);
-  }
-  smembers = (k: string) => this.client.smembers(PREFIX + k);
-  sismember = async (k: string, m: string) => (await this.client.sismember(PREFIX + k, m)) === 1;
-}
-
 /* -------------------------------- Mémoire -------------------------------- */
 
 class MemoryStore implements Store {
@@ -216,15 +178,12 @@ export function getStore(): Store {
         () => (globalStore.__mcpStore = undefined),
       );
       break;
-    case "redis":
-      globalStore.__mcpStore = new RedisStore((process.env.REDIS_URL || process.env.KV_URL)!);
-      break;
     case "memory":
-      console.warn("[store] Ni MONGODB_URI ni REDIS_URL : stockage en mémoire (développement uniquement).");
+      console.warn("[store] MONGODB_URI absente : stockage en mémoire (développement uniquement).");
       globalStore.__mcpStore = new MemoryStore();
       break;
     case "missing":
-      throw new Error("La variable d'environnement MONGODB_URI (ou REDIS_URL) est requise en production.");
+      throw new Error("La variable d'environnement MONGODB_URI est requise en production.");
   }
   return globalStore.__mcpStore!;
 }

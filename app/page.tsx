@@ -9,7 +9,7 @@ import UsersPanel from "./_components/UsersPanel";
 
 interface Session {
   actor: Actor | null;
-  configured: { encryptionKey: boolean; adminPassword: boolean; store: "mongodb" | "redis" | "memory" | "missing" };
+  configured: { encryptionKey: boolean; adminPassword: boolean; store: "mongodb" | "memory" | "missing" };
 }
 
 type Tab = "connections" | "users" | "account";

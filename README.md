@@ -105,7 +105,6 @@ Pour tester sans assistant, lancez `npx @modelcontextprotocol/inspector` : trans
 | `ADMIN_EMAIL` | non | Identifiant de connexion de l'administrateur (« admin » par défaut). |
 | `MONGODB_URI` | oui en production | Stockage du serveur : connexions, comptes utilisateurs, jetons OAuth (MongoDB Atlas recommandé). |
 | `MONGODB_DB` | non | Base utilisée dans le cluster (« mcp_server » par défaut). |
-| `REDIS_URL` (ou `KV_URL`) | non | Alternative à MongoDB, utilisée seulement si `MONGODB_URI` est vide. |
 | `PUBLIC_BASE_URL` | non | URL publique, utile avec un domaine personnalisé ou derrière un proxy. |
 
 ### Stockage : MongoDB Atlas (offre gratuite M0)
@@ -180,7 +179,7 @@ lib/
   oauth.ts                              Serveur d'autorisation OAuth
   auth.ts                               Authentification, sessions, protections
   users.ts                              Comptes utilisateurs, mots de passe, invitations
-  store.ts                              Stockage MongoDB (ou Redis, ou mémoire en développement)
+  store.ts                              Stockage MongoDB (ou mémoire en développement)
   crypto.ts                             Chiffrement, jetons, empreintes
   sql-guard.ts                          Garde-fou SQL pour la lecture seule
   mcp/server.ts                         Définition des outils MCP
