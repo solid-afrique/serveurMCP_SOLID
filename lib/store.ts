@@ -54,7 +54,19 @@ class MongoStore implements Store {
       const col = client.db(dbName).collection<KvDoc>("kv");
       await col.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
       return col;
-    })();
+    })().catch((e: Error) => {
+      // Atlas coupe la négociation TLS quand l'IP n'est pas autorisée : message peu parlant.
+      const network = /ssl|tls|ServerSelection|ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(`${e.name} ${e.message}`);
+      const auth = /auth/i.test(`${e.name} ${e.message}`);
+      throw new Error(
+        network
+          ? "Stockage MongoDB injoignable : autorisez l'accès depuis n'importe quelle IP (0.0.0.0/0) dans Atlas → Network Access."
+          : auth
+            ? "Stockage MongoDB : identifiants refusés. Vérifiez l'utilisateur et le mot de passe de MONGODB_URI."
+            : `Stockage MongoDB indisponible : ${e.message}`,
+        { cause: e },
+      );
+    });
     // En cas d'échec de connexion, la requête suivante retentera avec un nouveau client.
     this.collection.catch((e) => {
       console.error("[store] MongoDB :", e.message);
