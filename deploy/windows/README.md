@@ -14,14 +14,14 @@ Ce guide installe le serveur MCP **sur un serveur Windows du réseau de l'entrep
  │                            http://127.0.0.1:3100                       │
  │                              │                 │                       │
  │                              ▼                 ▼                       │
- │              Base de stockage « mcp_server »   Vos bases MySQL /       │
+ │        Base MySQL « mcp_server »               Vos bases MySQL /       │
  │              (comptes, connexions chiffrées)   SQL Server (lecture)    │
  └────────────────────────────────────────────────────────────────────────┘
 ```
 
 - Le serveur MCP n'écoute que sur `127.0.0.1`. Seul le tunnel le publie, protégé par OAuth (identifiant et mot de passe pour chaque assistant).
 - Les bases restent fermées à Internet. Le serveur MCP les joint par le réseau interne (`localhost` ou IP interne).
-- Les données du serveur (utilisateurs, connexions, autorisations) sont stockées dans **votre MySQL ou votre SQL Server**, dans une base dédiée `mcp_server`. MongoDB n'est pas nécessaire.
+- Les données du serveur (utilisateurs, connexions, autorisations) sont stockées dans **MySQL**, dans une base dédiée `mcp_server`. MongoDB n'est pas nécessaire. Les bases SQL Server, elles, restent connectables aux assistants.
 
 ## 1. Prérequis
 
@@ -30,17 +30,20 @@ Ce guide installe le serveur MCP **sur un serveur Windows du réseau de l'entrep
 | Windows Server | 2016 ou plus récent, compte administrateur |
 | Node.js | **22 LTS** (installateur `.msi` sur [nodejs.org](https://nodejs.org)) |
 | Git for Windows | [git-scm.com](https://git-scm.com/download/win), pour récupérer le code et les mises à jour |
-| Base de stockage | Le MySQL ou le SQL Server déjà présent sur le serveur |
+| MySQL | 5.7+, 8.x ou MariaDB 10.5+, pour la base de stockage (le MySQL déjà présent convient) |
 | HTTPS public | Un compte Cloudflare (gratuit) dont le DNS gère votre domaine, **ou** IIS avec un certificat (voir l'annexe) |
 
 Après l'installation de Node.js et de Git, **rouvrez PowerShell** pour qu'ils soient reconnus.
 
-## 2. Créer la base de stockage
+## 2. Créer la base de stockage MySQL
 
-Choisissez **un** moteur. Modifiez d'abord `CHANGEZ-MOI` dans le script : ce sera le mot de passe de `STORE_URL`.
+Modifiez d'abord `CHANGEZ-MOI` dans `deploy\windows\sql\mysql-stockage.sql` : ce sera le mot de passe de `STORE_URL`. Exécutez ensuite le script avec un compte administrateur MySQL :
 
-- **SQL Server** : ouvrez `deploy\windows\sql\sqlserver-stockage.sql` dans SQL Server Management Studio, puis cliquez sur **Exécuter**. L'instance doit accepter l'authentification SQL Server (*Propriétés du serveur → Sécurité → mode SQL Server et Windows*, puis redémarrage du service SQL Server).
-- **MySQL / MariaDB** : `mysql -u root -p < deploy\windows\sql\mysql-stockage.sql`
+```powershell
+mysql -u root -p < deploy\windows\sql\mysql-stockage.sql
+```
+
+Vous pouvez aussi l'ouvrir dans MySQL Workbench ou phpMyAdmin et l'exécuter.
 
 Le serveur MCP crée lui-même ses deux tables (`mcp_kv`, `mcp_set`) au premier démarrage. Le compte `mcp_server` n'a de droits que sur cette base.
 
@@ -68,7 +71,7 @@ Au premier lancement, le script crée `C:\mcp-server\.env.local` et l'ouvre dans
 |---|---|
 | `ENCRYPTION_KEY` | Générée avec `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. **Sauvegardez-la** dans votre gestionnaire de mots de passe : sans elle, les connexions enregistrées sont irrécupérables. |
 | `ADMIN_PASSWORD` | Mot de passe long du compte administrateur (identifiant `admin`). |
-| `STORE_URL` | `sqlserver://mcp_server:MOT_DE_PASSE@127.0.0.1:1433/mcp_server` ou `mysql://mcp_server:MOT_DE_PASSE@127.0.0.1:3306/mcp_server`. Encodez les caractères spéciaux du mot de passe (`@` → `%40`, `#` → `%23`…). |
+| `STORE_URL` | `mysql://mcp_server:MOT_DE_PASSE@127.0.0.1:3306/mcp_server`. Encodez les caractères spéciaux du mot de passe (`@` → `%40`, `#` → `%23`…). |
 | `PUBLIC_BASE_URL` | L'adresse HTTPS finale, par exemple `https://mcp.votre-domaine.com`. |
 | `CLIENT_IP_HEADER` | `cf-connecting-ip` avec Cloudflare Tunnel. |
 
@@ -76,7 +79,7 @@ Enregistrez, puis **relancez le script**. Il installe les dépendances, compile 
 
 ```
 Installation terminée.
-  Local     : http://127.0.0.1:3100  (stockage : sqlserver)
+  Local     : http://127.0.0.1:3100  (stockage : mysql)
 ```
 
 Si le stockage est en erreur, le message indique la cause : service arrêté, identifiants refusés, base absente…
@@ -117,7 +120,17 @@ Décochez **SSL / TLS** pour une base locale.
 
 **Bases sur un autre serveur du réseau** : indiquez son IP ou son nom interne (ex. `10.0.0.25`, `srv-sql01`). Autorisez le serveur MCP dans le pare-feu de ce serveur (port 3306 ou 1433).
 
-## 7. Ajouter le serveur aux assistants
+## 7. Créer les administrateurs et les utilisateurs
+
+Le compte `admin` défini dans `.env.local` est un **compte de secours**. Dans l'onglet **Utilisateurs** :
+
+1. Invitez chaque personne (e-mail) et transmettez-lui son lien d'invitation : elle y choisit son mot de passe.
+2. Pour les responsables, cliquez sur **Nommer administrateur**. Ils gèrent alors connexions et utilisateurs avec leur propre compte.
+3. Gardez le mot de passe du compte de secours en lieu sûr, pour la première connexion et les dépannages.
+
+Tous ces comptes sont enregistrés dans la base MySQL `mcp_server`.
+
+## 8. Ajouter le serveur aux assistants
 
 L'URL MCP de chaque connexion est de la forme `https://mcp.votre-domaine.com/api/mcp/<identifiant>`. Elle est affichée dans l'interface avec la procédure pour Claude, ChatGPT et Copilot. Chaque utilisateur s'autorise avec **son propre compte**.
 

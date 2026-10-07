@@ -25,14 +25,18 @@ Une interface web permet d'enregistrer des connexions, de les tester et d'obteni
 
 | | Administrateur | Utilisateur |
 |---|---|---|
-| **Compte** | Défini par les variables d'environnement `ADMIN_EMAIL` (« admin » par défaut) et `ADMIN_PASSWORD` | Créé par l'administrateur et activé via un lien d'invitation |
+| **Compte** | Utilisateur promu « administrateur » (enregistré dans le stockage), ou compte de secours défini par `ADMIN_EMAIL` (« admin » par défaut) et `ADMIN_PASSWORD` | Créé par un administrateur et activé via un lien d'invitation |
 | **Connexions visibles** | Toutes | Ses connexions privées et celles que l'administrateur lui attribue |
 | **Créer une connexion** | Oui (attribuable à des utilisateurs) | Oui, privée : visible de lui seul et de l'administrateur |
 | **Modifier / supprimer** | Toutes les connexions | Ses connexions privées uniquement |
 | **Voir la configuration** (hôte, utilisateur…) | Toutes | Ses connexions privées uniquement. Les mots de passe ne sont jamais renvoyés au navigateur. |
 | **Attribuer une connexion** | Oui, à un ou plusieurs utilisateurs (les connexions privées ne sont pas partageables) | Non |
-| **Gérer les comptes** | Inviter, réinitialiser un mot de passe, désactiver, réactiver, supprimer | Changer son propre mot de passe |
+| **Gérer les comptes** | Inviter, réinitialiser un mot de passe, nommer ou retirer un administrateur, désactiver, réactiver, supprimer | Changer son propre mot de passe |
 | **Autoriser un assistant** | Sur n'importe quelle connexion | Sur les connexions auxquelles il a accès |
+
+### Administrateurs
+
+Le compte de secours (`admin` / `ADMIN_PASSWORD`) sert à la première connexion et en cas de problème. Pour l'usage courant, invitez les personnes concernées puis cliquez sur **Nommer administrateur**. Leur compte, avec leur propre mot de passe, est enregistré dans le stockage. Les connexions qu'un administrateur crée appartiennent au pool commun et peuvent être attribuées. Retirer le rôle prend effet immédiatement, y compris pour les assistants déjà autorisés.
 
 ### Cycle de vie d'un compte
 
@@ -84,7 +88,7 @@ cp .env.example .env.local   # renseignez ENCRYPTION_KEY et ADMIN_PASSWORD (stoc
 npm run dev                   # http://localhost:3000, identifiant « admin »
 ```
 
-Sans `STORE_URL` ni `MONGODB_URI`, le stockage se fait en mémoire et se vide à chaque redémarrage. Pour un stockage persistant en local, indiquez une base MySQL ou SQL Server dans `STORE_URL`, ou un MongoDB dans `MONGODB_URI`.
+Sans `STORE_URL` ni `MONGODB_URI`, le stockage se fait en mémoire et se vide à chaque redémarrage. Pour un stockage persistant en local, indiquez une base MySQL dans `STORE_URL`, ou un MongoDB dans `MONGODB_URI`.
 
 Pour générer une clé :
 
@@ -100,7 +104,7 @@ Deux façons d'héberger le serveur :
 
 | Hébergement | Pour quelles bases | Stockage du serveur | Guide |
 |---|---|---|---|
-| **Windows Server de l'entreprise** | Bases internes (MySQL, SQL Server) **et** bases accessibles sur Internet | MySQL ou SQL Server existant (`STORE_URL`) | [deploy/windows/README.md](deploy/windows/README.md) |
+| **Windows Server de l'entreprise** | Bases internes (MySQL, SQL Server) **et** bases accessibles sur Internet | MySQL (`STORE_URL`) | [deploy/windows/README.md](deploy/windows/README.md) |
 | **Vercel / Netlify** | Uniquement des bases accessibles depuis Internet | MongoDB Atlas (`MONGODB_URI`) | Ci-dessous |
 
 ### Variables d'environnement
@@ -110,7 +114,7 @@ Deux façons d'héberger le serveur :
 | `ENCRYPTION_KEY` | oui | Chiffrement des paramètres de connexion stockés (32 caractères aléatoires ou plus recommandés). **La changer rend illisibles les connexions enregistrées.** |
 | `ADMIN_PASSWORD` | oui | Mot de passe du compte administrateur. Choisissez-le long. |
 | `ADMIN_EMAIL` | non | Identifiant de connexion de l'administrateur (« admin » par défaut). |
-| `STORE_URL` | une des deux en production | Stockage dans une base relationnelle : `mysql://…` ou `sqlserver://…` (prioritaire). |
+| `STORE_URL` | une des deux en production | Stockage dans MySQL / MariaDB : `mysql://…` (prioritaire). |
 | `MONGODB_URI` | une des deux en production | Stockage dans MongoDB (Atlas recommandé sur Vercel). |
 | `MONGODB_DB` | non | Base utilisée dans le cluster (« mcp_server » par défaut). |
 | `CLIENT_IP_HEADER` | non | En-tête de confiance portant l'IP du visiteur derrière un proxy (`cf-connecting-ip` avec Cloudflare Tunnel). |
@@ -190,7 +194,7 @@ lib/
   auth.ts                               Authentification, sessions, protections
   users.ts                              Comptes utilisateurs, mots de passe, invitations
   store.ts                              Choix du stockage, MongoDB et mémoire (développement)
-  store-sql.ts                          Stockage MySQL / SQL Server
+  store-mysql.ts                        Stockage MySQL
   crypto.ts                             Chiffrement, jetons, empreintes
   sql-guard.ts                          Garde-fou SQL pour la lecture seule
   mcp/server.ts                         Définition des outils MCP

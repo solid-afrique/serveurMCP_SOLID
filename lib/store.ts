@@ -1,9 +1,9 @@
 import { MongoClient, type Collection } from "mongodb";
-import { MysqlStore, SqlServerStore } from "./store-sql";
+import { MysqlStore } from "./store-mysql";
 
 /**
  * Stockage clé-valeur du serveur (connexions, comptes, clients OAuth, jetons).
- * - base relationnelle via STORE_URL : mysql://… ou sqlserver://… (serveur d'entreprise) ;
+ * - MySQL / MariaDB via STORE_URL : mysql://… (serveur d'entreprise) ;
  * - MongoDB via MONGODB_URI (par ex. MongoDB Atlas, utilisé sur Vercel) ;
  * - développement sans configuration : mémoire, perdue au redémarrage.
  * STORE_URL est prioritaire si les deux sont définies.
@@ -21,14 +21,13 @@ export interface Store {
   sismember(key: string, member: string): Promise<boolean>;
 }
 
-export type StoreKind = "mysql" | "sqlserver" | "mongodb" | "memory" | "missing";
+export type StoreKind = "mysql" | "mongodb" | "memory" | "missing";
 
 export function storeKind(): StoreKind {
   const url = process.env.STORE_URL?.trim();
   if (url) {
     if (/^(mysql|mariadb):\/\//i.test(url)) return "mysql";
-    if (/^(sqlserver|mssql):\/\//i.test(url)) return "sqlserver";
-    throw new Error("STORE_URL doit commencer par mysql:// ou sqlserver://");
+    throw new Error("STORE_URL doit être une adresse MySQL : mysql://utilisateur:motdepasse@hote:3306/mcp_server");
   }
   if (process.env.MONGODB_URI) return "mongodb";
   return process.env.NODE_ENV === "production" ? "missing" : "memory";
@@ -196,9 +195,6 @@ export function getStore(): Store {
     case "mysql":
       globalStore.__mcpStore = new MysqlStore(process.env.STORE_URL!.trim().replace(/^mariadb:/i, "mysql:"), reset);
       break;
-    case "sqlserver":
-      globalStore.__mcpStore = new SqlServerStore(process.env.STORE_URL!.trim(), reset);
-      break;
     case "mongodb":
       globalStore.__mcpStore = new MongoStore(
         process.env.MONGODB_URI!,
@@ -211,7 +207,7 @@ export function getStore(): Store {
       globalStore.__mcpStore = new MemoryStore();
       break;
     case "missing":
-      throw new Error("Configurez le stockage : STORE_URL (mysql:// ou sqlserver://) ou MONGODB_URI.");
+      throw new Error("Configurez le stockage : STORE_URL (mysql://…) ou MONGODB_URI.");
   }
   return globalStore.__mcpStore!;
 }

@@ -18,12 +18,15 @@ export const INVITE_TTL = 7 * 24 * 60 * 60;
 export const MIN_PASSWORD_LENGTH = 10;
 
 export type UserStatus = "invited" | "active" | "disabled";
+export type UserRole = "user" | "admin";
 
 export interface User {
   id: string;
   email: string;
   name: string;
   status: UserStatus;
+  /** « admin » : mêmes droits que le compte administrateur de secours (.env). Absent = utilisateur. */
+  role?: UserRole;
   passwordHash?: string;
   /** Incrémenté à chaque changement de mot de passe ou désactivation : invalide les sessions. */
   sessionVersion: number;
@@ -187,6 +190,17 @@ export async function setUserStatus(id: string, status: "active" | "disabled"): 
   if (status === "active" && !user.passwordHash) throw new Error("Ce compte n'a pas encore accepté son invitation.");
   await saveUser({ ...user, status, sessionVersion: user.sessionVersion + 1 });
   if (status === "disabled") await revokeUserGrants(id);
+}
+
+/**
+ * Promeut un utilisateur administrateur, ou lui retire ce rôle. Ses droits changent
+ * immédiatement : chaque requête relit le rôle (session et accès des assistants).
+ */
+export async function setUserRole(id: string, role: unknown): Promise<void> {
+  if (role !== "admin" && role !== "user") throw new Error("Rôle invalide.");
+  const user = await getUser(id);
+  if (!user) throw new Error("Utilisateur introuvable.");
+  await saveUser({ ...user, role });
 }
 
 export async function renameUser(id: string, name: unknown): Promise<void> {

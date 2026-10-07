@@ -10,6 +10,7 @@ export interface UserRow {
   email: string;
   name: string;
   status: "invited" | "active" | "disabled";
+  role?: "user" | "admin";
   createdAt: number;
   lastLoginAt?: number;
   ownedConnections: number;

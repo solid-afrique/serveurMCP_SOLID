@@ -246,7 +246,8 @@ function AccessManager({
 }) {
   const [selected, setSelected] = useState(new Set(connection.userIds));
   const [error, setError] = useState<string>();
-  const candidates = users;
+  // Les administrateurs voient déjà toutes les connexions.
+  const candidates = users.filter((u) => u.role !== "admin");
 
   async function save() {
     const res = await api(`/api/connections/${connection.id}/users`, "PUT", { userIds: [...selected] });

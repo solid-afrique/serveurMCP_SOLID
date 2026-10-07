@@ -107,6 +107,7 @@ export default function UsersPanel() {
                 <strong>{u.name}</strong>
                 <span className="hint">{u.email}</span>
                 <span className={STATUS[u.status].badge}>{STATUS[u.status].label}</span>
+                {u.role === "admin" && <span className="badge">Administrateur</span>}
               </div>
               <dl className="meta">
                 <div><dt>Créé</dt><dd>{formatDate(u.createdAt)}</dd></div>
@@ -118,6 +119,27 @@ export default function UsersPanel() {
                 {u.status !== "disabled" && (
                   <button className="btn secondary" onClick={() => newLink(u)}>
                     {u.status === "invited" ? "Nouveau lien d’invitation" : "Réinitialiser le mot de passe"}
+                  </button>
+                )}
+                {u.role === "admin" ? (
+                  <button
+                    className="btn secondary"
+                    onClick={() =>
+                      confirm(`Retirer le rôle administrateur à ${u.email} ?\n\nIl ne verra plus que ses connexions privées et celles qui lui sont attribuées.`) &&
+                      run(api(`/api/admin/users/${u.id}`, "PATCH", { role: "user" }), `${u.email} n’est plus administrateur.`)
+                    }
+                  >
+                    Retirer le rôle admin
+                  </button>
+                ) : (
+                  <button
+                    className="btn secondary"
+                    onClick={() =>
+                      confirm(`Nommer ${u.email} administrateur ?\n\nIl pourra voir et gérer toutes les connexions et tous les utilisateurs.`) &&
+                      run(api(`/api/admin/users/${u.id}`, "PATCH", { role: "admin" }), `${u.email} est maintenant administrateur.`)
+                    }
+                  >
+                    Nommer administrateur
                   </button>
                 )}
                 {u.status === "active" && (
