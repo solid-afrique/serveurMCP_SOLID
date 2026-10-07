@@ -53,6 +53,8 @@ const versionOf = (s: Session) =>
 const sign = (payload: string) => hmac(payload, "session");
 
 function isSecure(req: Request): boolean {
+  // Derrière IIS ou un tunnel, la requête arrive en HTTP local : l'adresse publique fait foi.
+  if (process.env.PUBLIC_BASE_URL?.startsWith("https://")) return true;
   const proto = req.headers.get("x-forwarded-proto")?.split(",")[0] ?? new URL(req.url).protocol.replace(":", "");
   return proto === "https";
 }
@@ -94,9 +96,11 @@ export function sameOrigin(req: Request): boolean {
   if (req.method === "GET" || req.method === "HEAD") return true;
   const origin = req.headers.get("origin");
   if (!origin) return true; // clients non navigateurs
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  // Derrière un proxy (IIS, Cloudflare), l'en-tête Host peut être 127.0.0.1 : l'adresse publique fait foi.
+  const allowed = [req.headers.get("x-forwarded-host"), req.headers.get("host")];
   try {
-    return new URL(origin).host === host;
+    if (process.env.PUBLIC_BASE_URL) allowed.push(new URL(process.env.PUBLIC_BASE_URL).host);
+    return allowed.includes(new URL(origin).host);
   } catch {
     return false;
   }

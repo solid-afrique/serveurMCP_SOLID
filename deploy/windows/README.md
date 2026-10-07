@@ -8,21 +8,22 @@ Le déploiement est **manuel** : l'application est compilée sur un poste de dé
  Claude / ChatGPT / Copilot
             │  HTTPS (https://mcp.votre-domaine.com)
             ▼
-   Cloudflare (tunnel chiffré, sortant : aucun port entrant à ouvrir)
-            │
  ┌──────────┼──────────────────── Windows Server ─────────────────────────┐
  │          ▼                                                             │
- │  cloudflared (service) ──▶ Serveur MCP (service « mcp-db-server »)     │
- │                            http://127.0.0.1:3100                       │
- │                              │                 │                       │
- │                              ▼                 ▼                       │
- │        Base MySQL « mcp_server »               Vos bases MySQL /       │
- │        (utilisateurs, administrateurs,         SQL Server (lecture)    │
- │         connexions chiffrées)                                          │
+ │  IIS (site « mcp-server », certificat HTTPS, proxy inverse ARR)        │
+ │          │                                                             │
+ │          ▼                                                             │
+ │  Serveur MCP (service Windows « mcp-db-server »)                       │
+ │  http://127.0.0.1:3100                                                 │
+ │          │                         │                                   │
+ │          ▼                         ▼                                   │
+ │  Base MySQL « mcp_server »         Vos bases MySQL /                   │
+ │  (utilisateurs, administrateurs,   SQL Server (lecture)                │
+ │   connexions chiffrées)                                                │
  └────────────────────────────────────────────────────────────────────────┘
 ```
 
-- Le serveur MCP n'écoute que sur `127.0.0.1`. Seul le tunnel le publie, protégé par OAuth (chaque assistant est autorisé avec un identifiant et un mot de passe).
+- Le serveur MCP est un service Windows qui n'écoute que sur `127.0.0.1`. **IIS le publie** en HTTPS, comme vos autres applications, avec vos certificats. L'accès est protégé par OAuth : chaque assistant est autorisé avec un identifiant et un mot de passe.
 - Les bases restent fermées à Internet. Le serveur MCP les joint par le réseau interne (`localhost` ou IP interne).
 - Les comptes (utilisateurs, administrateurs) et les connexions sont stockés dans **MySQL**, dans une base dédiée `mcp_server`.
 
@@ -46,7 +47,8 @@ Copiez ce fichier sur le serveur, par partage réseau, clé USB ou Bureau à dis
 | Windows Server | 2016 ou plus récent, compte administrateur |
 | Node.js | **22 LTS**, installateur `.msi` sur [nodejs.org](https://nodejs.org). S'il n'y a pas d'Internet sur le serveur, téléchargez-le ailleurs et copiez-le. |
 | MySQL | 5.7+, 8.x ou MariaDB 10.5+, pour la base de stockage (le MySQL déjà présent convient) |
-| HTTPS public | Un compte Cloudflare (gratuit) dont le DNS gère votre domaine, **ou** IIS avec un certificat (voir l'annexe) |
+| IIS | Avec les modules **URL Rewrite** ([télécharger](https://www.iis.net/downloads/microsoft/url-rewrite)) et **Application Request Routing 3.0** ([télécharger](https://www.iis.net/downloads/microsoft/application-request-routing)). Installateurs `.msi` copiables comme le paquet. |
+| Nom d'hôte et certificat | Par exemple `mcp.votre-domaine.com`, avec un enregistrement DNS vers le serveur et un certificat dans *Ordinateur local → Personnel* (celui de votre domaine ou un certificat Let's Encrypt obtenu avec [win-acme](https://www.win-acme.com/)) |
 
 Après l'installation de Node.js, **rouvrez PowerShell** pour que la commande `node` soit reconnue.
 
@@ -78,7 +80,7 @@ Vous pouvez aussi l'exécuter depuis MySQL Workbench ou phpMyAdmin. Le serveur M
    | `ADMIN_PASSWORD` | Mot de passe long du **compte de secours** (identifiant `admin`). |
    | `STORE_URL` | `mysql://mcp_server:MOT_DE_PASSE@127.0.0.1:3306/mcp_server`. Encodez les caractères spéciaux du mot de passe : `@` → `%40`, `#` → `%23`, `:` → `%3A`, `/` → `%2F`, `%` → `%25`. |
    | `PUBLIC_BASE_URL` | L'adresse HTTPS finale, par exemple `https://mcp.votre-domaine.com`. |
-   | `CLIENT_IP_HEADER` | `cf-connecting-ip` avec Cloudflare Tunnel. |
+   | `CLIENT_IP_HEADER` | `x-real-ip` (valeur du modèle, à garder avec IIS). |
 
 4. Enregistrez, puis **relancez la même commande**. Le script crée le service `mcp-db-server` (démarrage automatique, redémarrage en cas d'arrêt) et vérifie le stockage. Il doit se terminer par :
 
@@ -89,19 +91,29 @@ Vous pouvez aussi l'exécuter depuis MySQL Workbench ou phpMyAdmin. Le serveur M
 
    En cas d'erreur, le message indique la cause : MySQL arrêté, identifiants refusés, base absente…
 
-## 5. Publier en HTTPS avec Cloudflare Tunnel
+## 5. Publier en HTTPS avec IIS
 
-1. Installez **cloudflared** : l'installateur `cloudflared-windows-amd64.msi` est sur [github.com/cloudflare/cloudflared/releases](https://github.com/cloudflare/cloudflared/releases). Vous pouvez le copier comme le paquet.
-2. Dans le tableau de bord Cloudflare, ouvrez **Zero Trust → Networks → Tunnels → Create a tunnel**, choisissez **Cloudflared**, puis nommez le tunnel, par exemple `mcp-windows`.
-3. À l'étape *Install connector*, choisissez **Windows**. Copiez la commande `cloudflared.exe service install <JETON>` et exécutez-la dans PowerShell administrateur.
-4. À l'étape **Public Hostname**, remplissez :
-   - **Subdomain** : `mcp` ;
-   - **Domain** : votre domaine ;
-   - **Service** : `HTTP` ;
-   - **URL** : `localhost:3100`.
-5. Vérifiez depuis n'importe quel poste : `https://mcp.votre-domaine.com/api/health` doit répondre `{"ok":true,"store":"mysql"}`.
+IIS sert de porte d'entrée HTTPS et transmet les requêtes au service `mcp-db-server` (proxy inverse ARR). Dans PowerShell administrateur :
 
-N'activez pas **Cloudflare Access** devant ce nom d'hôte. Claude et ChatGPT seraient bloqués, et l'authentification est déjà assurée par le serveur (OAuth).
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\mcp-server\iis-setup.ps1 -HostName mcp.votre-domaine.com -CertThumbprint <EMPREINTE>
+```
+
+L'empreinte du certificat s'obtient avec `Get-ChildItem Cert:\LocalMachine\My | Format-List Subject, Thumbprint`.
+
+Le script :
+1. vérifie qu'IIS, URL Rewrite et ARR sont installés ;
+2. active le proxy ARR au niveau du serveur, avec la conservation du nom d'hôte et un délai de 2 minutes ;
+3. autorise les variables `HTTP_X_REAL_IP` et `HTTP_X_FORWARDED_HOST`, qui transmettent au serveur MCP la vraie IP du visiteur et le nom d'hôte public ;
+4. crée `C:\inetpub\mcp-server\web.config` (règle de proxy vers `http://127.0.0.1:3100`, WebDAV désactivé) ;
+5. crée le pool d'applications « Aucun code managé » et le site `mcp-server`, avec la liaison `https://mcp.votre-domaine.com` (SNI).
+
+**Vous préférez créer le site vous-même ?** Lancez le script **sans paramètre** : il fait les étapes 1 à 4. Créez ensuite le site dans le Gestionnaire IIS, avec le chemin physique `C:\inetpub\mcp-server`, votre liaison HTTPS habituelle et un pool « Aucun code managé ».
+
+Vérifiez ensuite :
+- `.env.local` contient `PUBLIC_BASE_URL=https://mcp.votre-domaine.com` et `CLIENT_IP_HEADER=x-real-ip`. Si vous les changez, lancez `Restart-Service mcp-db-server`.
+- Depuis un autre poste, `https://mcp.votre-domaine.com/api/health` répond `{"ok":true,"store":"mysql"}`.
+- Claude et ChatGPT doivent pouvoir joindre ce nom d'hôte **depuis Internet**. Si le site n'est accessible qu'en interne, voir l'annexe Cloudflare Tunnel.
 
 ## 6. Connecter vos bases
 
@@ -164,13 +176,13 @@ Le script arrête le service, remplace l'application et redémarre. `.env.local`
 
 **Sauvegardes** : sauvegardez la base MySQL `mcp_server` avec vos sauvegardes habituelles, **et** gardez `ENCRYPTION_KEY` à part. L'une ne sert à rien sans l'autre.
 
-## Annexe : IIS au lieu de Cloudflare Tunnel
+## Annexe : Cloudflare Tunnel si le serveur n'est pas accessible depuis Internet
 
-Si le serveur a une IP publique et que le port 443 peut lui être ouvert :
+Claude et ChatGPT se connectent depuis Internet. Si le serveur n'a ni IP publique ni port 443 ouvert, un tunnel Cloudflare publie le service **sans port entrant** (le domaine doit être géré par Cloudflare) :
 
-1. Installez les modules IIS **URL Rewrite** et **Application Request Routing (ARR)**. Dans *ARR → Server Proxy Settings*, cochez **Enable proxy**.
-2. Activez la préservation du nom d'hôte :
-   `%windir%\system32\inetsrv\appcmd.exe set config -section:system.webServer/proxy /preserveHostHeader:"True" /commit:apphost`
-3. Créez un site lié à `mcp.votre-domaine.com` et ajoutez une règle de réécriture inverse vers `http://127.0.0.1:3100/{R:1}`. Dans cette règle, ajoutez la variable serveur `HTTP_X_REAL_IP` = `{REMOTE_ADDR}`, à autoriser dans *Afficher les variables serveur*.
-4. Obtenez un certificat Let's Encrypt avec [win-acme](https://www.win-acme.com/) et liez-le au site en HTTPS.
-5. Dans `.env.local`, mettez `CLIENT_IP_HEADER=x-real-ip`, puis redémarrez le service.
+1. Installez **cloudflared** (`cloudflared-windows-amd64.msi`, [github.com/cloudflare/cloudflared/releases](https://github.com/cloudflare/cloudflared/releases)).
+2. Dans Cloudflare, ouvrez **Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared → Windows**, puis exécutez la commande `cloudflared.exe service install <JETON>` proposée.
+3. Dans **Public Hostname**, mettez `mcp` + votre domaine, avec le service `HTTP` et l'URL `localhost:3100`. IIS n'est alors pas nécessaire.
+4. Dans `.env.local`, mettez `CLIENT_IP_HEADER=cf-connecting-ip`, puis lancez `Restart-Service mcp-db-server`.
+
+N'activez pas Cloudflare Access sur ce nom d'hôte : les assistants seraient bloqués.
