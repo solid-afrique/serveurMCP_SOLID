@@ -8,3 +8,7 @@ next-env.d.ts
 .env
 .env.local
 .env.*.local
+
+# Déploiement Windows : binaire WinSW téléchargé et journaux du service
+deploy/windows/service/
+deploy/windows/logs/

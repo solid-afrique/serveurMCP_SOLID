@@ -1,9 +1,12 @@
 import { MongoClient, type Collection } from "mongodb";
+import { MysqlStore, SqlServerStore } from "./store-sql";
 
 /**
  * Stockage clé-valeur du serveur (connexions, comptes, clients OAuth, jetons).
- * - production : MongoDB via MONGODB_URI (par ex. un cluster MongoDB Atlas) ;
+ * - base relationnelle via STORE_URL : mysql://… ou sqlserver://… (serveur d'entreprise) ;
+ * - MongoDB via MONGODB_URI (par ex. MongoDB Atlas, utilisé sur Vercel) ;
  * - développement sans configuration : mémoire, perdue au redémarrage.
+ * STORE_URL est prioritaire si les deux sont définies.
  */
 export interface Store {
   get(key: string): Promise<string | null>;
@@ -18,9 +21,15 @@ export interface Store {
   sismember(key: string, member: string): Promise<boolean>;
 }
 
-export type StoreKind = "mongodb" | "memory" | "missing";
+export type StoreKind = "mysql" | "sqlserver" | "mongodb" | "memory" | "missing";
 
 export function storeKind(): StoreKind {
+  const url = process.env.STORE_URL?.trim();
+  if (url) {
+    if (/^(mysql|mariadb):\/\//i.test(url)) return "mysql";
+    if (/^(sqlserver|mssql):\/\//i.test(url)) return "sqlserver";
+    throw new Error("STORE_URL doit commencer par mysql:// ou sqlserver://");
+  }
   if (process.env.MONGODB_URI) return "mongodb";
   return process.env.NODE_ENV === "production" ? "missing" : "memory";
 }
@@ -182,20 +191,27 @@ const globalStore = globalThis as unknown as { __mcpStore?: Store };
 
 export function getStore(): Store {
   if (globalStore.__mcpStore) return globalStore.__mcpStore;
+  const reset = () => (globalStore.__mcpStore = undefined);
   switch (storeKind()) {
+    case "mysql":
+      globalStore.__mcpStore = new MysqlStore(process.env.STORE_URL!.trim().replace(/^mariadb:/i, "mysql:"), reset);
+      break;
+    case "sqlserver":
+      globalStore.__mcpStore = new SqlServerStore(process.env.STORE_URL!.trim(), reset);
+      break;
     case "mongodb":
       globalStore.__mcpStore = new MongoStore(
         process.env.MONGODB_URI!,
         process.env.MONGODB_DB || "mcp_server",
-        () => (globalStore.__mcpStore = undefined),
+        reset,
       );
       break;
     case "memory":
-      console.warn("[store] MONGODB_URI absente : stockage en mémoire (développement uniquement).");
+      console.warn("[store] Ni STORE_URL ni MONGODB_URI : stockage en mémoire (développement uniquement).");
       globalStore.__mcpStore = new MemoryStore();
       break;
     case "missing":
-      throw new Error("La variable d'environnement MONGODB_URI est requise en production.");
+      throw new Error("Configurez le stockage : STORE_URL (mysql:// ou sqlserver://) ou MONGODB_URI.");
   }
   return globalStore.__mcpStore!;
 }

@@ -348,7 +348,11 @@ export async function revokeToken(token: string): Promise<void> {
 /** IP du client, lue uniquement dans l'en-tête fixé par la plateforme (non falsifiable). */
 export function clientIp(req: Request): string {
   const h = req.headers;
-  const ip = process.env.NETLIFY
+  // Derrière un proxy de confiance (ex. Cloudflare Tunnel : CLIENT_IP_HEADER=cf-connecting-ip).
+  const trusted = process.env.CLIENT_IP_HEADER?.trim().toLowerCase();
+  const ip = trusted
+    ? h.get(trusted)?.split(",")[0]
+    : process.env.NETLIFY
     ? h.get("x-nf-client-connection-ip")
     : process.env.VERCEL
       ? (h.get("x-real-ip") ?? h.get("x-forwarded-for")?.split(",")[0])
