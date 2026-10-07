@@ -2,7 +2,7 @@
 <#
 .SYNOPSIS
   Arrête et supprime le service Windows du serveur MCP.
-  Les données (base de stockage) et la configuration (.env.local) sont conservées.
+  La base MySQL de stockage, la configuration (.env.local) et les fichiers sont conservés.
 #>
 param([string]$ServiceId = "mcp-db-server")
 
@@ -16,4 +16,4 @@ if (-not (Get-Service -Name $ServiceId -ErrorAction SilentlyContinue)) {
 Stop-Service -Name $ServiceId -Force -ErrorAction SilentlyContinue
 & $exe uninstall
 if ($LASTEXITCODE -ne 0) { throw "La suppression du service a échoué." }
-Write-Host "Service $ServiceId supprimé. La base de stockage et .env.local sont conservés." -ForegroundColor Green
+Write-Host "Service $ServiceId supprimé. La base MySQL, .env.local et les fichiers sont conservés." -ForegroundColor Green

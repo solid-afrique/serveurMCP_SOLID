@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pg", "mysql2", "mssql", "tedious", "mongodb", "ioredis"],
   poweredByHeader: false,
 
+  // Paquet autonome pour un déploiement manuel (deploy/windows/package.ps1) ; Vercel n'en a pas besoin.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
+  // Aucune image optimisée : évite la bibliothèque native « sharp » (liée au processeur de compilation).
+  images: { unoptimized: true },
+
   // Découverte OAuth attendue par les clients MCP (RFC 8414 et RFC 9728).
   async rewrites() {
     return [
