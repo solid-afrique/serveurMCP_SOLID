@@ -1,5 +1,7 @@
 # Déploiement sur Windows Server (paquet .zip)
 
+> **Vous déployez vos applications avec IIS ?** Suivez plutôt **[IIS-MANUEL.md](IIS-MANUEL.md)** : déploiement manuel où IIS héberge directement le serveur MCP (copie du dossier, pool et site créés dans le Gestionnaire IIS), sans service Windows ni script. Le présent guide décrit l'autre méthode, avec un service Windows et des scripts d'installation.
+
 Ce guide installe le serveur MCP **sur un serveur Windows du réseau de l'entreprise**, pour que Claude, ChatGPT et Copilot puissent interroger vos bases **MySQL et SQL Server internes**, sans les exposer sur Internet.
 
 Le déploiement est **manuel** : l'application est compilée sur un poste de développement, puis copiée sous forme d'un fichier `.zip`. Sur le serveur, **seul Node.js est nécessaire** : ni Git, ni npm, ni accès Internet pendant l'installation.
@@ -80,7 +82,7 @@ Vous pouvez aussi l'exécuter depuis MySQL Workbench ou phpMyAdmin. Le serveur M
    | `ADMIN_PASSWORD` | Mot de passe long du **compte de secours** (identifiant `admin`). |
    | `STORE_URL` | `mysql://mcp_server:MOT_DE_PASSE@127.0.0.1:3306/mcp_server`. Encodez les caractères spéciaux du mot de passe : `@` → `%40`, `#` → `%23`, `:` → `%3A`, `/` → `%2F`, `%` → `%25`. |
    | `PUBLIC_BASE_URL` | L'adresse HTTPS finale, par exemple `https://mcp.votre-domaine.com`. |
-   | `CLIENT_IP_HEADER` | `x-real-ip` (valeur du modèle, à garder avec IIS). |
+   | `CLIENT_IP_HEADER` | `x-real-ip` avec cette méthode (site IIS créé par `iis-setup.ps1`). |
 
 4. Enregistrez, puis **relancez la même commande**. Le script crée le service `mcp-db-server` (démarrage automatique, redémarrage en cas d'arrêt) et vérifie le stockage. Il doit se terminer par :
 
