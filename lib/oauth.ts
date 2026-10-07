@@ -345,19 +345,28 @@ export async function revokeToken(token: string): Promise<void> {
 
 /* ------------------------- Limitation de débit ------------------------- */
 
+/** Retire le port éventuel : « 1.2.3.4:5678 » → « 1.2.3.4 », « [::1]:5678 » → « ::1 ». */
+function withoutPort(value: string): string {
+  const v = value.trim();
+  const bracketed = v.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketed) return bracketed[1];
+  return /^[\d.]+:\d+$/.test(v) ? v.slice(0, v.lastIndexOf(":")) : v;
+}
+
 /** IP du client, lue uniquement dans l'en-tête fixé par la plateforme (non falsifiable). */
 export function clientIp(req: Request): string {
   const h = req.headers;
-  // Derrière un proxy de confiance (ex. Cloudflare Tunnel : CLIENT_IP_HEADER=cf-connecting-ip).
+  // Derrière un proxy de confiance : CLIENT_IP_HEADER=x-forwarded-for (IIS), x-real-ip, cf-connecting-ip…
   const trusted = process.env.CLIENT_IP_HEADER?.trim().toLowerCase();
-  const ip = trusted
-    ? h.get(trusted)?.split(",")[0]
-    : process.env.NETLIFY
-    ? h.get("x-nf-client-connection-ip")
-    : process.env.VERCEL
-      ? (h.get("x-real-ip") ?? h.get("x-forwarded-for")?.split(",")[0])
-      : h.get("x-forwarded-for")?.split(",")[0];
-  return ip?.trim() || "inconnue";
+  let ip: string | undefined;
+  if (trusted) {
+    const values = h.get(trusted)?.split(",") ?? [];
+    // Le proxy AJOUTE l'IP réelle en fin de X-Forwarded-For ; les premières valeurs viennent du client.
+    ip = trusted === "x-forwarded-for" ? values.at(-1) : values[0];
+  } else if (process.env.NETLIFY) ip = h.get("x-nf-client-connection-ip") ?? undefined;
+  else if (process.env.VERCEL) ip = h.get("x-real-ip") ?? h.get("x-forwarded-for")?.split(",")[0];
+  else ip = h.get("x-forwarded-for")?.split(",")[0];
+  return ip ? withoutPort(ip) || "inconnue" : "inconnue";
 }
 
 const LOCK_WINDOW = 15 * 60;

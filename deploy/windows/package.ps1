@@ -50,7 +50,7 @@ foreach ($dir in "node_modules\@img", "node_modules\sharp") {
 $native = Get-ChildItem (Join-Path $staging "app") -Recurse -Filter *.node
 if ($native) { throw "Modules natifs inattendus (dépendants du processeur) : $($native.FullName -join ', ')" }
 
-foreach ($file in "launcher.cjs", "install.ps1", "update.ps1", "uninstall.ps1", "iis-setup.ps1", "env.windows.example", "README.md") {
+foreach ($file in "launcher.cjs", "web.config", "IIS-MANUEL.md", "install.ps1", "update.ps1", "uninstall.ps1", "iis-setup.ps1", "env.windows.example", "README.md") {
   Copy-Item (Join-Path $PSScriptRoot $file) (Join-Path $staging $file)
 }
 Copy-Item (Join-Path $PSScriptRoot "sql") (Join-Path $staging "sql") -Recurse
@@ -74,8 +74,18 @@ Set-Content -Path (Join-Path $staging "VERSION.txt") -Encoding UTF8 -Value @(
 Step "Création de l'archive"
 $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[IO.Compression.ZipFile]::CreateFromDirectory($staging, $zip, [IO.Compression.CompressionLevel]::Optimal, $false)
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+# Entrées écrites une à une avec des « / » : sous Windows PowerShell 5.1, CreateFromDirectory
+# produit des chemins avec « \ », contraires au format ZIP et mal gérés par certains outils.
+$archive = [IO.Compression.ZipFile]::Open($zip, [IO.Compression.ZipArchiveMode]::Create)
+try {
+  $prefix = $staging.TrimEnd("\").Length + 1
+  foreach ($file in Get-ChildItem $staging -Recurse -File -Force) {
+    $entry = $file.FullName.Substring($prefix).Replace("\", "/")
+    [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $entry, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+  }
+}
+finally { $archive.Dispose() }
 Remove-Item $staging -Recurse -Force
 
 $size = [math]::Round((Get-Item $zip).Length / 1MB, 1)
