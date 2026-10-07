@@ -52,10 +52,12 @@ Step "Remplacement de l'application (l'ancienne est conservée dans app.previous
 if (Test-Path $Previous) { Remove-Item $Previous -Recurse -Force }
 Move-Item $App $Previous
 Move-Item (Join-Path $temp "app") $App
-foreach ($file in "launcher.cjs", "install.ps1", "update.ps1", "uninstall.ps1", "env.windows.example", "README.md", "VERSION.txt") {
+foreach ($file in "launcher.cjs", "install.ps1", "update.ps1", "uninstall.ps1", "iis-setup.ps1", "env.windows.example", "README.md", "VERSION.txt") {
   Copy-Item (Join-Path $temp $file) (Join-Path $Root $file) -Force
 }
 Copy-Item (Join-Path $temp "sql\*") (Join-Path $Root "sql") -Recurse -Force
+New-Item -ItemType Directory -Force -Path (Join-Path $Root "iis") | Out-Null
+Copy-Item (Join-Path $temp "iis\*") (Join-Path $Root "iis") -Recurse -Force
 Copy-Item (Join-Path $temp "service\WinSW-x64.exe") (Join-Path $Root "service\WinSW-x64.exe") -Force
 Get-ChildItem $Root -Recurse -File | Unblock-File
 Remove-Item $temp -Recurse -Force

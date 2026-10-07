@@ -50,10 +50,11 @@ foreach ($dir in "node_modules\@img", "node_modules\sharp") {
 $native = Get-ChildItem (Join-Path $staging "app") -Recurse -Filter *.node
 if ($native) { throw "Modules natifs inattendus (dépendants du processeur) : $($native.FullName -join ', ')" }
 
-foreach ($file in "launcher.cjs", "install.ps1", "update.ps1", "uninstall.ps1", "env.windows.example", "README.md") {
+foreach ($file in "launcher.cjs", "install.ps1", "update.ps1", "uninstall.ps1", "iis-setup.ps1", "env.windows.example", "README.md") {
   Copy-Item (Join-Path $PSScriptRoot $file) (Join-Path $staging $file)
 }
 Copy-Item (Join-Path $PSScriptRoot "sql") (Join-Path $staging "sql") -Recurse
+Copy-Item (Join-Path $PSScriptRoot "iis") (Join-Path $staging "iis") -Recurse
 
 # WinSW est inclus pour que le serveur n'ait pas besoin d'Internet (mis en cache entre deux paquets).
 $cache = Join-Path $dist "cache\WinSW-x64.exe"
