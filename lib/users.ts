@@ -110,7 +110,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Crée un compte en attente et renvoie le jeton d'invitation (à transmettre à l'utilisateur). */
 export async function createUser(input: { email: unknown; name?: unknown }): Promise<{ user: User; inviteToken: string }> {
-  if (typeof input.email !== "string" || !EMAIL_RE.test(input.email.trim())) {
+  if (typeof input.email !== "string" || input.email.trim().length > 254 || !EMAIL_RE.test(input.email.trim())) {
     throw new Error("Adresse e-mail invalide.");
   }
   const email = normalizeEmail(input.email);

@@ -80,11 +80,11 @@ Les résultats sont limités à « Lignes max. par réponse » (200 par défaut,
 
 ```bash
 npm install
-cp .env.example .env.local   # renseignez ENCRYPTION_KEY et ADMIN_PASSWORD (MONGODB_URI facultatif en local)
+cp .env.example .env.local   # renseignez ENCRYPTION_KEY et ADMIN_PASSWORD (stockage facultatif en local)
 npm run dev                   # http://localhost:3000, identifiant « admin »
 ```
 
-Sans `MONGODB_URI`, le stockage se fait en mémoire et se vide à chaque redémarrage. Pour un MongoDB local : `docker run -d -p 27017:27017 mongo:8` puis `MONGODB_URI=mongodb://localhost:27017`.
+Sans `STORE_URL` ni `MONGODB_URI`, le stockage se fait en mémoire et se vide à chaque redémarrage. Pour un stockage persistant en local, indiquez une base MySQL ou SQL Server dans `STORE_URL`, ou un MongoDB dans `MONGODB_URI`.
 
 Pour générer une clé :
 
@@ -96,6 +96,13 @@ Pour tester sans assistant, lancez `npx @modelcontextprotocol/inspector` : trans
 
 ## Déploiement
 
+Deux façons d'héberger le serveur :
+
+| Hébergement | Pour quelles bases | Stockage du serveur | Guide |
+|---|---|---|---|
+| **Windows Server de l'entreprise** | Bases internes (MySQL, SQL Server) **et** bases accessibles sur Internet | MySQL ou SQL Server existant (`STORE_URL`) | [deploy/windows/README.md](deploy/windows/README.md) |
+| **Vercel / Netlify** | Uniquement des bases accessibles depuis Internet | MongoDB Atlas (`MONGODB_URI`) | Ci-dessous |
+
 ### Variables d'environnement
 
 | Variable | Obligatoire | Rôle |
@@ -103,8 +110,10 @@ Pour tester sans assistant, lancez `npx @modelcontextprotocol/inspector` : trans
 | `ENCRYPTION_KEY` | oui | Chiffrement des paramètres de connexion stockés (32 caractères aléatoires ou plus recommandés). **La changer rend illisibles les connexions enregistrées.** |
 | `ADMIN_PASSWORD` | oui | Mot de passe du compte administrateur. Choisissez-le long. |
 | `ADMIN_EMAIL` | non | Identifiant de connexion de l'administrateur (« admin » par défaut). |
-| `MONGODB_URI` | oui en production | Stockage du serveur : connexions, comptes utilisateurs, jetons OAuth (MongoDB Atlas recommandé). |
+| `STORE_URL` | une des deux en production | Stockage dans une base relationnelle : `mysql://…` ou `sqlserver://…` (prioritaire). |
+| `MONGODB_URI` | une des deux en production | Stockage dans MongoDB (Atlas recommandé sur Vercel). |
 | `MONGODB_DB` | non | Base utilisée dans le cluster (« mcp_server » par défaut). |
+| `CLIENT_IP_HEADER` | non | En-tête de confiance portant l'IP du visiteur derrière un proxy (`cf-connecting-ip` avec Cloudflare Tunnel). |
 | `PUBLIC_BASE_URL` | non | URL publique, utile avec un domaine personnalisé ou derrière un proxy. |
 
 ### Stockage : MongoDB Atlas (offre gratuite M0)
@@ -173,13 +182,15 @@ app/
   api/connections/…                     Connexions (selon les droits), attribution, révocation, test
   api/admin/users/…                     Gestion des utilisateurs (administrateur)
   api/oauth/…                           Métadonnées, enregistrement, autorisation, jetons, révocation
+deploy/windows/                         Installation sur Windows Server (service, scripts SQL, guide)
 lib/
   config.ts                             Schéma des paramètres de connexion
   connections.ts                        Registre des connexions, droits d'accès et autorisations
   oauth.ts                              Serveur d'autorisation OAuth
   auth.ts                               Authentification, sessions, protections
   users.ts                              Comptes utilisateurs, mots de passe, invitations
-  store.ts                              Stockage MongoDB (ou mémoire en développement)
+  store.ts                              Choix du stockage, MongoDB et mémoire (développement)
+  store-sql.ts                          Stockage MySQL / SQL Server
   crypto.ts                             Chiffrement, jetons, empreintes
   sql-guard.ts                          Garde-fou SQL pour la lecture seule
   mcp/server.ts                         Définition des outils MCP
