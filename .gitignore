@@ -12,3 +12,6 @@ next-env.d.ts
 # Déploiement Windows : binaire WinSW téléchargé et journaux du service
 deploy/windows/service/
 deploy/windows/logs/
+
+# Paquets de déploiement Windows (npm run package:windows)
+dist/
