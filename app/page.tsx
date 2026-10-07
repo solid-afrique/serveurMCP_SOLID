@@ -9,7 +9,7 @@ import UsersPanel from "./_components/UsersPanel";
 
 interface Session {
   actor: Actor | null;
-  configured: { encryptionKey: boolean; adminPassword: boolean; store: "mysql" | "sqlserver" | "mongodb" | "memory" | "missing" };
+  configured: { encryptionKey: boolean; adminPassword: boolean; store: "mysql" | "mongodb" | "memory" | "missing" };
 }
 
 type Tab = "connections" | "users" | "account";
@@ -29,16 +29,14 @@ export default function Home() {
   }, [refreshSession]);
 
   const actor = session?.actor;
+  // Le compte de secours (.env) n'a pas de mot de passe modifiable ; les comptes enregistrés, si.
+  const hasAccount = Boolean(actor && actor.id !== "admin");
   const tabs: { id: Tab; label: string }[] = actor
-    ? actor.role === "admin"
-      ? [
-          { id: "connections", label: "Connexions" },
-          { id: "users", label: "Utilisateurs" },
-        ]
-      : [
-          { id: "connections", label: "Mes connexions" },
-          { id: "account", label: "Mon compte" },
-        ]
+    ? [
+        { id: "connections", label: actor.role === "admin" ? "Connexions" : "Mes connexions" },
+        ...(actor.role === "admin" ? [{ id: "users" as Tab, label: "Utilisateurs" }] : []),
+        ...(hasAccount ? [{ id: "account" as Tab, label: "Mon compte" }] : []),
+      ]
     : [];
 
   return (
@@ -53,13 +51,15 @@ export default function Home() {
         </div>
         {actor && (
           <div className="whoami">
-            {actor.role === "admin" ? (
-              <span className="badge">Administrateur</span>
-            ) : (
+            {hasAccount ? (
               <span>
                 <strong>{actor.name}</strong>
-                <span className="badge muted">Utilisateur</span>
+                <span className={actor.role === "admin" ? "badge" : "badge muted"}>
+                  {actor.role === "admin" ? "Administrateur" : "Utilisateur"}
+                </span>
               </span>
+            ) : (
+              <span className="badge">Administrateur (compte de secours)</span>
             )}
             <button
               className="btn ghost-lg"
@@ -88,7 +88,7 @@ export default function Home() {
           </nav>
           {tab === "connections" && <ConnectionsPanel key={actor.id} actor={actor} onUnauthorized={refreshSession} />}
           {tab === "users" && actor.role === "admin" && <UsersPanel />}
-          {tab === "account" && actor.role === "user" && <AccountPanel actor={actor} />}
+          {tab === "account" && hasAccount && <AccountPanel actor={actor} />}
         </>
       )}
 
@@ -114,7 +114,7 @@ function ConfigBanners({ configured }: { configured: Session["configured"] }) {
       )}
       {configured.store === "missing" && (
         <div className="banner error">
-          Aucun stockage configuré : définissez <code>STORE_URL</code> (MySQL ou SQL Server) ou <code>MONGODB_URI</code>. Comptes et connexions ne peuvent pas être enregistrés.
+          Aucun stockage configuré : définissez <code>STORE_URL</code> (MySQL) ou <code>MONGODB_URI</code>. Comptes et connexions ne peuvent pas être enregistrés.
         </div>
       )}
       {configured.store === "memory" && (

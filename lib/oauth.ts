@@ -269,7 +269,7 @@ export async function grantHasAccess(grant: Pick<Grant, "userId">, conn: StoredC
   if (grant.userId === ADMIN_ID) return true;
   const user = await getUser(grant.userId);
   if (!user || user.status !== "active") return false;
-  return canUse({ id: user.id, role: "user" }, conn);
+  return canUse({ id: user.id, role: user.role === "admin" ? "admin" : "user" }, conn);
 }
 
 export async function exchangeCode(client: OAuthClient, form: URLSearchParams) {

@@ -81,7 +81,8 @@ export async function createConnection(config: ConnectionConfig, owner: Actor, e
   const stored: StoredConnection = {
     id,
     ...metadata(config),
-    ownerId: owner.id,
+    // Les connexions créées par un administrateur appartiennent au pool commun (attribuable).
+    ownerId: owner.role === "admin" ? ADMIN_ID : owner.id,
     createdAt: now,
     updatedAt: now,
     expiresAt: expiresInDays ? now + expiresInDays * 86_400_000 : undefined,
@@ -240,7 +241,7 @@ export async function createGrant(
     connId,
     ...client,
     userId: actor.id,
-    userLabel: actor.role === "admin" ? "Administrateur" : actor.email,
+    userLabel: actor.id === ADMIN_ID ? "Administrateur" : actor.email,
     createdAt: Date.now(),
   };
   await store.set(k.grant(grant.id), JSON.stringify(grant), ttlSeconds);

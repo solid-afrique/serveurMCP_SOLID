@@ -17,7 +17,7 @@ export function adminConfigured(): boolean {
 }
 
 export const adminActor = (): Actor => ({ id: ADMIN_ID, role: "admin", email: adminIdentifier(), name: "Administrateur" });
-const userActor = (u: User): Actor => ({ id: u.id, role: "user", email: u.email, name: u.name });
+const userActor = (u: User): Actor => ({ id: u.id, role: u.role === "admin" ? "admin" : "user", email: u.email, name: u.name });
 
 /**
  * Vérifie un identifiant et un mot de passe (administrateur ou utilisateur),
@@ -49,7 +49,7 @@ export async function authenticate(req: Request, identifier: unknown, password: 
 
 // La version entre dans la signature : changer de mot de passe ou désactiver un compte ferme ses sessions.
 const versionOf = (s: Session) =>
-  s.actor.role === "admin" ? sha256(process.env.ADMIN_PASSWORD ?? "").slice(0, 16) : String(s.user!.sessionVersion);
+  s.actor.id === ADMIN_ID ? sha256(process.env.ADMIN_PASSWORD ?? "").slice(0, 16) : String(s.user!.sessionVersion);
 const sign = (payload: string) => hmac(payload, "session");
 
 function isSecure(req: Request): boolean {
