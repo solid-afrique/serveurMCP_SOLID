@@ -33,7 +33,7 @@ Serveur [MCP](https://modelcontextprotocol.io) qui permet à **Claude, ChatGPT, 
 | Attribuer une connexion | Oui | Non |
 | Comptes | Inviter, réinitialiser un mot de passe, nommer administrateur, désactiver, supprimer, déconnecter les assistants | Changer son mot de passe, déconnecter ses assistants |
 
-- **Création des comptes** : l'administrateur génère un **lien d'invitation** à usage unique (7 jours), que l'utilisateur ouvre pour choisir son mot de passe. Aucun e-mail n'est envoyé.
+- **Création des comptes** : l'administrateur saisit l'e-mail de l'utilisateur, qui reçoit un **lien d'invitation** à usage unique (7 jours) pour choisir son mot de passe. Même chose pour la réinitialisation d'un mot de passe. L'envoi passe par SMTP (`MAIL_*` dans `.env`, test : `php artisan mcp:mail-test vous@exemple.com`) ; s'il n'est pas configuré ou échoue, le lien est affiché à l'administrateur pour qu'il le transmette lui-même.
 - **Premier administrateur et dépannage** : `php artisan mcp:admin email@domaine.com`.
 
 ## Outils exposés aux assistants
@@ -76,6 +76,7 @@ app/Mcp/Tools/                         Outils SQL, MongoDB, Redis
 app/Http/Middleware/AuthorizeMcpConnection.php   Contrôle d'accès à chaque requête MCP
 app/Services/Databases/                Accès aux bases (PDO, MongoDB, Predis), garde-fou SQL
 app/Models/                            User, DatabaseConnection (paramètres chiffrés), Invitation
+app/Mail/InvitationMail.php            E-mail d'invitation (vue resources/views/mail/invitation)
 app/Http/Controllers/                  Interface : connexions, utilisateurs, compte, invitations
 resources/views/                       Pages Blade (dont mcp/authorize : consentement OAuth)
 routes/ai.php                          Routes MCP et OAuth ; routes/web.php : interface

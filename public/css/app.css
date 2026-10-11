@@ -201,6 +201,9 @@ nav.tabs { margin-bottom: 20px; }
   background: var(--bg); display: flex; flex-direction: column; gap: 10px;
 }
 .access-box .hint { margin: 0; }
+.access-box .banner { margin: 0; }
+.access-box details { display: flex; flex-direction: column; gap: 10px; }
+.access-box summary { cursor: pointer; margin-bottom: 10px; }
 .checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 
 /* --- Version Laravel (pages rendues côté serveur) --- */

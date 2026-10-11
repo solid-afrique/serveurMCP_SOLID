@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Mail\InvitationMail;
 use App\Models\DatabaseConnection;
 use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class AccessTest extends TestCase
@@ -104,6 +106,41 @@ class AccessTest extends TestCase
         $this->assertAuthenticatedAs($user);
 
         $this->get("/invitation/{$token}")->assertSee('Lien invalide');
+    }
+
+    public function test_le_lien_d_invitation_est_envoye_par_e_mail(): void
+    {
+        Mail::fake();
+        $admin = $this->user(['role' => User::ROLE_ADMIN, 'name' => 'Admin']);
+
+        $this->actingAs($admin)->from('/users')->post('/users', ['email' => 'Moussa@Exemple.bf'])
+            ->assertRedirect('/users')
+            ->assertSessionHas('invite.mailed', true);
+
+        $user = User::where('email', 'moussa@exemple.bf')->firstOrFail();
+        $url = session('invite')['url'];
+        Mail::assertSent(InvitationMail::class, function (InvitationMail $mail) use ($user, $url) {
+            $html = $mail->render();
+
+            return $mail->hasTo($user->email) && ! $mail->reset && $mail->url === $url
+                && str_contains($html, 'Activer mon compte') && str_contains($html, e($url));
+        });
+
+        // Compte actif : lien de réinitialisation, envoyé lui aussi.
+        $active = $this->user();
+        $this->actingAs($admin)->post("/users/{$active->id}/invitation")->assertSessionHas('invite.reset', true);
+        Mail::assertSent(InvitationMail::class, fn (InvitationMail $mail) => $mail->hasTo($active->email) && $mail->reset);
+    }
+
+    public function test_sans_configuration_d_envoi_le_lien_est_seulement_affiche(): void
+    {
+        Mail::fake();
+        config(['mail.default' => 'log']);
+        $admin = $this->user(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->post('/users', ['email' => 'awa@exemple.bf'])->assertSessionHas('invite', fn ($invite) => $invite['mailed'] === null);
+        Mail::assertNothingSent();
+        $this->get('/users')->assertSee('L’envoi d’e-mails n’est pas configuré', false);
     }
 
     public function test_endpoint_mcp_protege_par_oauth(): void

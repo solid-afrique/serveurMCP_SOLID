@@ -87,6 +87,7 @@ Dans le paquet, ouvrez `deploy\sql\mysql-application.sql` et remplacez `CHANGEZ-
 |---|---|
 | `APP_URL` | `https://mcp.votre-domaine.com` (sans `/` final) |
 | `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` | `mcp_server` / `mcp_server` / le mot de passe de l'étape 3 |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` | Serveur SMTP pour envoyer les liens d'invitation (Microsoft 365 : `smtp.office365.com`, port `587`, avec une boîte autorisée à envoyer en SMTP authentifié ; ou votre relais SMTP interne). Mot de passe entre guillemets s'il contient des espaces ou `#`. Sans SMTP, mettez `MAIL_MAILER=log` : les liens sont alors seulement affichés à l'administrateur. |
 | `APP_DEBUG` | **`false`**. Ne passez jamais à `true` en production : les erreurs détaillées seraient envoyées aux assistants. |
 
 4. Dans **PowerShell en administrateur** :
@@ -98,6 +99,7 @@ $php = "C:\PHP\php.exe"
 & $php artisan migrate --force               # crée les tables dans MySQL
 & $php artisan passport:keys                 # clés de signature OAuth (storage\oauth-*.key)
 & $php artisan mcp:admin vous@votre-domaine.com --name="Votre nom"   # premier administrateur (mot de passe demandé)
+& $php artisan mcp:mail-test vous@votre-domaine.com   # vérifie l'envoi des e-mails (SMTP)
 & $php artisan config:cache
 & $php artisan route:cache
 & $php artisan view:cache
@@ -132,7 +134,7 @@ Depuis un autre poste :
 - `https://mcp.votre-domaine.com` → page de connexion. Connectez-vous avec l'administrateur créé à l'étape 4.
 
 Ensuite :
-1. **Utilisateurs** : invitez vos collègues (lien d'invitation à leur transmettre) et nommez les administrateurs.
+1. **Utilisateurs** : invitez vos collègues (ils reçoivent leur lien d'invitation par e-mail) et nommez les administrateurs.
 2. **Connexions** : créez les connexions à vos bases. Utilisez de préférence des comptes en lecture seule, créés avec `deploy\sql\sqlserver-lecteur.sql` ou `deploy\sql\mysql-lecteur.sql`. Une base sur ce serveur s'indique avec l'hôte `localhost` ; une instance nommée SQL Server avec `localhost\SQLEXPRESS` (service *SQL Server Browser* démarré), ou bien par son port TCP fixe.
 3. **Assistants** : chaque connexion affiche son URL MCP et la procédure pour Claude, ChatGPT, Copilot, Claude Code et Cursor.
 
@@ -176,4 +178,5 @@ robocopy C:\Temp\mcp-nouveau C:\inetpub\mcp-server /E /XF .env /XD storage
 | « The stream or file … could not be opened » | Droits d'écriture manquants | Relancez les commandes `icacls` (étape 5) |
 | `could not find driver` en testant une connexion SQL Server | `pdo_sqlsrv` ou ODBC Driver 18 absent | Voir *Pilote SQL Server* (étape 1) |
 | L'assistant n'arrive pas à se connecter (OAuth) | `APP_URL` différent de l'adresse publique, ou site non accessible depuis Internet | Corrigez `APP_URL`, `php artisan config:cache`, vérifiez `/.well-known/oauth-authorization-server` depuis l'extérieur |
+| Invitation « L'e-mail n'a pas pu être envoyé » | Paramètres SMTP incorrects, port 587 bloqué en sortie, ou SMTP authentifié désactivé pour la boîte (Microsoft 365) | `php artisan mcp:mail-test vous@domaine.com` affiche l'erreur exacte ; corrigez `MAIL_*`, puis `php artisan config:cache`. En attendant, le lien affiché peut être transmis à la main |
 | « redirect_uris … is not a permitted redirect domain » | Domaine de retour de l'assistant non autorisé | Ajoutez-le à `MCP_REDIRECT_DOMAINS` dans `.env`, puis `php artisan config:cache` |

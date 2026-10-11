@@ -19,20 +19,36 @@
             </label>
         </div>
         <div class="actions">
-            <button class="btn primary">Créer et obtenir le lien d’invitation</button>
+            <button class="btn primary">Créer et envoyer l’invitation</button>
         </div>
 
         @if ($invite = session('invite'))
+            @php($kind = $invite['reset'] ? 'Lien de réinitialisation' : 'Lien d’invitation')
+            @php($mailed = $invite['mailed'] ?? null)
             <div class="access-box">
-                <strong>{{ $invite['reset'] ? 'Lien de réinitialisation' : 'Lien d’invitation' }} pour {{ $invite['email'] }}</strong>
+                @if ($mailed === true)
+                    <div class="banner ok" role="status">{{ $kind }} envoyé par e-mail à {{ $invite['email'] }}.</div>
+                @elseif ($mailed === false)
+                    <div class="banner error">L’e-mail n’a pas pu être envoyé à {{ $invite['email'] }} (voir storage\logs). Transmettez-lui le lien ci-dessous.</div>
+                @else
+                    <div class="banner warn">L’envoi d’e-mails n’est pas configuré (MAIL_MAILER dans .env). Transmettez le lien ci-dessous à {{ $invite['email'] }}.</div>
+                @endif
+
+                @if ($mailed === true)
+                    <details>
+                        <summary class="hint">Afficher le lien (s’il ne reçoit pas l’e-mail)</summary>
+                @endif
                 <div class="url-box">
                     <code>{{ $invite['url'] }}</code>
                     <button type="button" class="btn primary" data-copy="{{ $invite['url'] }}">Copier</button>
                 </div>
                 <p class="hint">
-                    Transmettez ce lien à l’utilisateur par un canal de confiance : il permet de choisir le mot de passe du compte.
+                    {{ $kind }} pour {{ $invite['email'] }}, à transmettre par un canal de confiance : il permet de choisir le mot de passe du compte.
                     Il est valable 7 jours et ne sert qu’une fois{{ $invite['reset'] ? ' ; le mot de passe actuel reste valable jusqu’à son utilisation' : '' }}.
                 </p>
+                @if ($mailed === true)
+                    </details>
+                @endif
             </div>
         @endif
     </form>
@@ -63,9 +79,9 @@
                         <div class="actions compact">
                             @if ($u->status !== 'disabled')
                                 <form method="POST" action="{{ route('users.invite', $u) }}" class="inline"
-                                      @if ($u->status === 'active') data-confirm="Générer un lien de réinitialisation du mot de passe pour {{ $u->email }} ?" @endif>
+                                      @if ($u->status === 'active') data-confirm="Envoyer à {{ $u->email }} un lien de réinitialisation du mot de passe ?" @endif>
                                     @csrf
-                                    <button class="btn secondary">{{ $u->status === 'invited' ? 'Nouveau lien d’invitation' : 'Réinitialiser le mot de passe' }}</button>
+                                    <button class="btn secondary">{{ $u->status === 'invited' ? 'Renvoyer l’invitation' : 'Réinitialiser le mot de passe' }}</button>
                                 </form>
                             @endif
 

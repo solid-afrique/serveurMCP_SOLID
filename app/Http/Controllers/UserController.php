@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\InvitationMail;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Services\AssistantAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Throwable;
 
 /** Gestion des comptes (administrateurs uniquement). */
 class UserController extends Controller
@@ -22,7 +25,7 @@ class UserController extends Controller
         ]);
     }
 
-    /** Crée le compte et affiche le lien d'invitation à transmettre (aucun e-mail n'est envoyé). */
+    /** Crée le compte et envoie le lien d'invitation par e-mail. */
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -38,7 +41,7 @@ class UserController extends Controller
             'status' => 'invited',
         ]);
 
-        return back()->with('invite', ['email' => $user->email, 'url' => Invitation::issueFor($user), 'reset' => false]);
+        return $this->sendInvitation($request, $user, reset: false);
     }
 
     /** Nom, rôle (administrateur / utilisateur) ou statut (actif / désactivé). */
@@ -74,13 +77,13 @@ class UserController extends Controller
     }
 
     /** Nouveau lien d'invitation, ou de réinitialisation du mot de passe pour un compte actif. */
-    public function invite(User $user): RedirectResponse
+    public function invite(Request $request, User $user): RedirectResponse
     {
         if ($user->status === 'disabled') {
             return back()->withErrors(['user' => 'Réactivez d\'abord ce compte.']);
         }
 
-        return back()->with('invite', ['email' => $user->email, 'url' => Invitation::issueFor($user), 'reset' => $user->status === 'active']);
+        return $this->sendInvitation($request, $user, reset: $user->status === 'active');
     }
 
     public function revokeAssistants(User $user): RedirectResponse
@@ -101,5 +104,28 @@ class UserController extends Controller
         $user->delete();
 
         return back()->with('status', "{$user->email} a été supprimé, ainsi que ses connexions privées.");
+    }
+
+    /**
+     * Émet un nouveau lien et l'envoie par e-mail. Le lien reste affiché à l'administrateur,
+     * pour le transmettre autrement si l'envoi n'est pas configuré (MAIL_MAILER=log) ou échoue.
+     */
+    private function sendInvitation(Request $request, User $user, bool $reset): RedirectResponse
+    {
+        $url = Invitation::issueFor($user);
+        $mailed = null;
+
+        // Avec le pilote « log », le lien finirait en clair dans les journaux : on n'envoie rien.
+        if (config('mail.default') !== 'log') {
+            try {
+                Mail::to($user)->send(new InvitationMail($user, $url, $reset, $request->user()));
+                $mailed = true;
+            } catch (Throwable $e) {
+                report($e);
+                $mailed = false;
+            }
+        }
+
+        return back()->with('invite', ['email' => $user->email, 'url' => $url, 'reset' => $reset, 'mailed' => $mailed]);
     }
 }
