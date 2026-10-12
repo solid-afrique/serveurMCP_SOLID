@@ -35,7 +35,7 @@ $staging = Join-Path $dist $name
 Step "Copie du projet (sans les fichiers de développement)"
 if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
-$excludeDirs = @("vendor", "node_modules", ".git", "dist", "tests", ".idea", ".vscode") | ForEach-Object { Join-Path $Root $_ }
+$excludeDirs = @("vendor", "node_modules", ".git", "dist", "docs", "tests", ".idea", ".vscode") | ForEach-Object { Join-Path $Root $_ }
 $excludeDirs += @("storage\logs", "storage\framework\sessions", "storage\framework\views", "storage\framework\cache\data") | ForEach-Object { Join-Path $Root $_ }
 & robocopy $Root $staging /E /NFL /NDL /NJH /NJS /NP /XD $excludeDirs /XF ".env" "*.key" "*.log" ".phpunit.result.cache" "packages.php" "services.php" "config.php" "routes-v7.php" | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "La copie a échoué (robocopy $LASTEXITCODE)." }

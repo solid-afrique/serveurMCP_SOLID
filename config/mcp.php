@@ -19,7 +19,7 @@ return [
     // (liste séparée par des virgules) ; « * » autorise tous les domaines (déconseillé).
     'redirect_domains' => array_values(array_filter(array_map('trim', explode(',', (string) env(
         'MCP_REDIRECT_DOMAINS',
-        'https://claude.ai,https://claude.com,https://chatgpt.com,https://chat.openai.com,https://vscode.dev,https://insiders.vscode.dev,http://localhost,http://127.0.0.1',
+        'https://claude.ai,https://claude.com,https://chatgpt.com,https://chat.openai.com,https://vscode.dev,https://insiders.vscode.dev,https://global.consent.azure-apim.net,http://localhost,http://127.0.0.1',
     ))))),
 
     /*

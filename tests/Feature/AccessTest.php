@@ -143,6 +143,22 @@ class AccessTest extends TestCase
         $this->get('/users')->assertSee('L’envoi d’e-mails n’est pas configuré', false);
     }
 
+    public function test_enregistrement_oauth_selon_le_domaine_de_retour(): void
+    {
+        $register = fn (string $uri) => $this->postJson('/oauth/register', [
+            'client_name' => 'Assistant', 'redirect_uris' => [$uri], 'grant_types' => ['authorization_code', 'refresh_token'],
+            'response_types' => ['code'], 'token_endpoint_auth_method' => 'none',
+        ]);
+
+        // Copilot Studio (Power Platform) : adresse de retour propre à chaque connecteur.
+        $register('https://global.consent.azure-apim.net/redirect/cr123-5fbase-20nawetanes-5f0a1b2c3d4e5f')->assertCreated();
+        $register('https://claude.ai/api/mcp/auth_callback')->assertCreated();
+
+        \Log::spy();
+        $register('https://pirate.exemple/callback')->assertStatus(400)->assertJsonPath('error', 'invalid_redirect_uri');
+        \Log::shouldHaveReceived('warning')->withArgs(fn ($message, $context) => $context['redirect_uris'] === ['https://pirate.exemple/callback'])->once();
+    }
+
     public function test_endpoint_mcp_protege_par_oauth(): void
     {
         $connection = $this->connection();

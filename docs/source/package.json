@@ -1,0 +1,13 @@
+{
+  "name": "serveur-mcp-docs",
+  "private": true,
+  "description": "Génération des PDF et de la présentation du Serveur MCP",
+  "scripts": {
+    "pdf": "node build-pdf.cjs",
+    "pptx": "node build-pptx.cjs"
+  },
+  "devDependencies": {
+    "pptxgenjs": "3.12.0",
+    "puppeteer-core": "23.11.1"
+  }
+}

@@ -16,11 +16,10 @@
 @section('content')
     <h1>Autoriser l’accès</h1>
     <p>
-        <strong class="client-name">{{ $client->name }}</strong> demande à accéder à vos bases de données
         @if ($connection)
-            , en commençant par <strong>{{ $connection->name }}</strong> ({{ $connection->typeLabel() }}, {{ $connection->read_only ? 'lecture seule' : 'lecture et écriture' }}).
+            <strong class="client-name">{{ $client->name }}</strong> demande à accéder à vos bases de données, en commençant par <strong>{{ $connection->name }}</strong> ({{ $connection->typeLabel() }}, {{ $connection->read_only ? 'lecture seule' : 'lecture et écriture' }}).
         @else
-            .
+            <strong class="client-name">{{ $client->name }}</strong> demande à accéder à vos bases de données.
         @endif
     </p>
 

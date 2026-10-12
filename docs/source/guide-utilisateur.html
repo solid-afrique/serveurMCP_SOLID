@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Guide utilisateur — Serveur MCP</title>
+<link rel="stylesheet" href="style.css">
+<style>@page { @bottom-left { content: "Serveur MCP — Guide utilisateur"; } }</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="kicker">SOLID Afrique · Serveur MCP</div>
+  <h1>Guide utilisateur</h1>
+  <p class="subtitle">Interroger les bases de données de l’entreprise depuis Microsoft Copilot, Claude ou ChatGPT.</p>
+  <div class="spacer"></div>
+  <dl class="meta">
+    <dt>Public</dt><dd>Collaborateurs utilisateurs et administrateurs du service</dd>
+    <dt>Version</dt><dd>1.0 — octobre 2026</dd>
+    <dt>Application</dt><dd>Serveur MCP — Bases de données (version Laravel)</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h1 style="font-size:20pt;margin:0 0 6mm">Sommaire</h1>
+  <ol>
+    <li><a href="#presentation">Présentation</a></li>
+    <li><a href="#premiers-pas">Se connecter : le parcours en 5 étapes</a></li>
+    <li><a href="#connexions">Vos connexions</a></li>
+    <li><a href="#assistant">Ajouter une connexion à votre assistant</a>
+      <ol><li>Microsoft Copilot</li><li>Claude</li><li>ChatGPT</li><li>Autres outils</li><li>L’écran « Autoriser l’accès »</li></ol></li>
+    <li><a href="#questions">Poser des questions sur les données</a></li>
+    <li><a href="#compte">Votre compte</a></li>
+    <li><a href="#admin">Administration (administrateurs)</a></li>
+    <li><a href="#faq">Questions fréquentes et problèmes</a></li>
+    <li><a href="#securite">Bonnes pratiques de sécurité</a></li>
+  </ol>
+  <div class="note" style="margin-top:10mm">
+    <p><span class="label">Adresse du service.</span><code>https://luxewtey.com/mcpsolid</code> : ouvrez cette adresse dans votre navigateur pour vous connecter. Les URL MCP des bases ont la forme <code>https://luxewtey.com/mcpsolid/mcp/…</code>.</p>
+    <p>Les personnes et les bases de données des captures d’écran sont fictives.</p>
+  </div>
+</section>
+
+<main>
+
+<h2 id="presentation" class="first">Présentation</h2>
+<p>Le <strong>Serveur MCP</strong> permet de poser des questions en langage courant sur les données de l’entreprise (ventes, stock, comptabilité…) à un assistant d’intelligence artificielle : <strong>Microsoft Copilot</strong>, <strong>Claude</strong>, <strong>ChatGPT</strong> ou tout autre outil compatible avec le protocole MCP (<em>Model Context Protocol</em>).</p>
+<p>L’assistant consulte lui-même la base de données à travers le serveur, puis vous répond : tableau, synthèse, comparaison, graphique… Vous n’avez pas besoin de connaître le langage SQL.</p>
+
+<div class="diagram">
+  <div class="box"><h5>Vous</h5><p>Vous posez une question à votre assistant : « Quelles sont nos 10 meilleures ventes du mois ? »</p></div>
+  <div class="arrow">question</div>
+  <div class="box"><h5>Assistant IA</h5><p>Copilot, Claude ou ChatGPT interroge le Serveur MCP avec <em>votre</em> autorisation.</p></div>
+  <div class="arrow">requête</div>
+  <div class="box alt"><h5>Serveur MCP</h5><p>Vérifie vos droits, consulte la base (en lecture seule le plus souvent) et renvoie le résultat.</p></div>
+</div>
+
+<h3>Les notions à connaître</h3>
+<table>
+  <tr><th style="width:32%">Terme</th><th>Signification</th></tr>
+  <tr><td><strong>Connexion</strong></td><td>Une base de données rendue accessible par le serveur, par exemple « Ventes et facturation ». Chaque connexion a sa propre <strong>URL MCP</strong>.</td></tr>
+  <tr><td><strong>URL MCP</strong></td><td>L’adresse à donner à votre assistant, de la forme <code>https://luxewtey.com/mcpsolid/mcp/…</code>. Elle n’est pas secrète : sans votre autorisation, elle ne donne accès à rien.</td></tr>
+  <tr><td><strong>Autorisation</strong></td><td>La première fois, l’assistant vous envoie sur la page du serveur : vous vous connectez et cliquez sur <strong>Autoriser</strong>. L’assistant agit ensuite <em>en votre nom</em>, avec vos droits.</td></tr>
+  <tr><td><strong>Lecture seule</strong></td><td>L’assistant peut consulter les données, mais pas les modifier. C’est le mode recommandé, et le plus courant.</td></tr>
+  <tr><td><strong>Administrateur</strong></td><td>Personne qui crée les comptes, déclare les bases de données et décide qui accède à quoi.</td></tr>
+</table>
+
+<h2 id="premiers-pas">Se connecter : le parcours en 5 étapes</h2>
+<p>Pour interroger une base de données depuis votre assistant, vous suivez <strong>une seule fois</strong> le parcours ci-dessous. Seule la première étape revient à l’administrateur.</p>
+<table>
+  <tr><th style="width:8%">Étape</th><th style="width:17%">Qui</th><th>Ce qu’il faut faire</th><th style="width:27%">Où</th></tr>
+  <tr><td><strong>1</strong></td><td>Administrateur</td><td>Crée votre compte, vous envoie l’<strong>invitation</strong> par e-mail et vous attribue les bases dont vous avez besoin.</td><td>Onglet <strong>Utilisateurs</strong> (voir 7.2)</td></tr>
+  <tr><td><strong>2</strong></td><td>Vous</td><td>Ouvrez l’e-mail d’invitation et choisissez votre <strong>mot de passe</strong>.</td><td>Lien de l’e-mail (2.1 et 2.2)</td></tr>
+  <tr><td><strong>3</strong></td><td>Vous</td><td><strong>Connectez-vous</strong> avec votre e-mail et votre mot de passe.</td><td><code>https://luxewtey.com/mcpsolid</code> (2.3)</td></tr>
+  <tr><td><strong>4</strong></td><td>Vous</td><td><strong>Copiez le lien MCP</strong> de la base à interroger.</td><td><strong>Mes connexions → Copier</strong> (2.4)</td></tr>
+  <tr><td><strong>5</strong></td><td>Vous</td><td><strong>Ajoutez ce lien à votre assistant</strong>, puis cliquez sur <strong>Autoriser</strong>.</td><td>Copilot, Claude ou ChatGPT (2.5 et chapitre 4)</td></tr>
+</table>
+<div class="tip"><p>Ensuite, vous posez vos questions directement dans votre assistant. Vous ne revenez sur l’interface que pour récupérer le lien d’une nouvelle base, changer votre mot de passe ou gérer vos autorisations.</p></div>
+
+<h3>Recevoir l’invitation</h3>
+<p>Un administrateur crée votre compte avec votre adresse e-mail. Vous recevez alors un message intitulé <strong>« Votre invitation au Serveur MCP »</strong>.</p>
+<figure class="medium"><img src="img/02-email-invitation.png" alt="E-mail d'invitation"><figcaption>Figure 1 — E-mail d’invitation</figcaption></figure>
+<div class="warn"><p><span class="label">Important.</span>Le lien est personnel, ne sert qu’une seule fois et expire après <strong>7 jours</strong>. Ne le transférez à personne. S’il a expiré, demandez à un administrateur de vous renvoyer l’invitation. Pensez à vérifier le dossier des courriers indésirables.</p></div>
+
+<h3>Choisir votre mot de passe</h3>
+<ol class="steps">
+  <li>Cliquez sur <strong>Activer mon compte</strong> dans l’e-mail.</li>
+  <li>Choisissez un mot de passe d’au moins <strong>10 caractères</strong>, puis confirmez-le.</li>
+  <li>Cliquez sur <strong>Activer mon compte</strong> : vous êtes connecté et arrivez sur la liste de vos connexions.</li>
+</ol>
+<figure class="small"><img src="img/03-activation.png" alt="Activation du compte"><figcaption>Figure 2 — Choix du mot de passe</figcaption></figure>
+
+<h3>Se connecter à l’interface</h3>
+<ol class="steps">
+  <li>Ouvrez <code>https://luxewtey.com/mcpsolid</code> dans votre navigateur. Ajoutez cette adresse à vos favoris.</li>
+  <li>Saisissez votre <strong>e-mail</strong> (c’est votre identifiant) et votre <strong>mot de passe</strong>.</li>
+  <li>Cliquez sur <strong>Se connecter</strong> : vous arrivez sur la page <strong>Mes connexions</strong>.</li>
+</ol>
+<figure class="small"><img src="img/01-connexion.png" alt="Page de connexion"><figcaption>Figure 3 — Page de connexion</figcaption></figure>
+<ul>
+  <li><strong>Mot de passe oublié</strong> : demandez à un administrateur un <strong>lien de réinitialisation</strong>, que vous recevrez par e-mail.</li>
+  <li><strong>Trop d’essais erronés</strong> : la connexion est bloquée pendant 15 minutes par mesure de sécurité.</li>
+  <li><strong>Pour vous déconnecter</strong> : bouton <strong>Déconnexion</strong> en haut à droite.</li>
+</ul>
+
+<h3>Copier le lien MCP d’une base</h3>
+<ol class="steps">
+  <li>Sur la page <strong>Mes connexions</strong>, repérez la base à interroger (par exemple « Ventes et facturation »).</li>
+  <li>Cliquez sur <strong>Copier</strong>, à droite de son adresse <code>https://luxewtey.com/mcpsolid/mcp/…</code> : c’est son <strong>lien MCP</strong>.</li>
+  <li>Le bouton <strong>Ajouter à un assistant</strong> affiche la procédure détaillée pour chaque assistant.</li>
+</ol>
+<figure class="medium"><img src="img/p-lien-mcp.png" alt="Lien MCP d'une base"><figcaption>Figure 4 — Le lien MCP d’une base et son bouton « Copier »</figcaption></figure>
+<p>Une base dont vous avez besoin n’apparaît pas ? Demandez à un administrateur de vous l’attribuer : elle apparaîtra aussitôt dans la liste.</p>
+
+<h3>Connecter votre assistant</h3>
+<table>
+  <tr><th style="width:24%">Assistant</th><th>En bref (détails au chapitre 4)</th></tr>
+  <tr><td><strong>Microsoft Copilot</strong></td><td>Ouvrez l’<strong>agent</strong> de la base publié par l’entreprise dans Copilot ou Teams, posez une question, puis cliquez sur <strong>Se connecter</strong>.</td></tr>
+  <tr><td><strong>Claude</strong></td><td><strong>Paramètres → Connecteurs → Ajouter un connecteur personnalisé</strong>, collez le lien MCP, puis <strong>Se connecter</strong>.</td></tr>
+  <tr><td><strong>ChatGPT</strong></td><td><strong>Paramètres → Applications et connecteurs</strong> (mode développeur) <strong>→ Créer</strong>, collez le lien MCP, authentification <strong>OAuth</strong>.</td></tr>
+</table>
+<p>Dans tous les cas, la page du Serveur MCP s’ouvre : connectez-vous avec <em>votre</em> compte et cliquez sur <strong>Autoriser</strong> (voir 4.5). C’est fait : posez vos questions.</p>
+
+<h2 id="connexions">Vos connexions</h2>
+<p>L’onglet <strong>Mes connexions</strong> liste les bases auxquelles vous avez accès : celles qu’un administrateur vous a <strong>attribuées</strong>.</p>
+<figure class="tall"><img src="img/04-mes-connexions.png" alt="Mes connexions"><figcaption>Figure 5 — Liste « Mes connexions »</figcaption></figure>
+
+<h3>Lire une connexion</h3>
+<table>
+  <tr><th style="width:38%">Élément</th><th>Signification</th></tr>
+  <tr><td><span class="badge">MySQL / MariaDB</span> <span class="badge">SQL Server</span></td><td>Type de base de données.</td></tr>
+  <tr><td><span class="badge ok">Lecture seule</span> / <span class="badge warn">Écriture</span></td><td>Ce que l’assistant a le droit de faire. En « Écriture », il peut modifier des données : il doit vous demander confirmation avant chaque modification.</td></tr>
+  <tr><td><span class="badge muted">Attribuée par un administrateur</span></td><td>Base qui vous a été attribuée ; seul un administrateur peut la modifier.</td></tr>
+  <tr><td><span class="badge error">Expirée</span></td><td>La connexion avait une date d’expiration, désormais dépassée : elle ne fonctionne plus.</td></tr>
+  <tr><td>URL + bouton <strong>Copier</strong></td><td>L’adresse à coller dans votre assistant.</td></tr>
+  <tr><td><strong>Ajouter à un assistant</strong></td><td>Ouvre la page détaillant la procédure pour chaque assistant.</td></tr>
+</table>
+<p>Si la liste est vide, demandez à un administrateur de vous attribuer les connexions dont vous avez besoin.</p>
+
+<h2 id="assistant">Ajouter une connexion à votre assistant</h2>
+<p>Cliquez sur <strong>Ajouter à un assistant</strong> à côté de la connexion voulue. La page affiche l’URL MCP et, par onglet, la procédure propre à chaque assistant : <strong>Microsoft Copilot</strong> (onglet ouvert par défaut), Claude, ChatGPT, Claude Code, Cursor. Cette opération se fait <strong>une fois par connexion et par assistant</strong>.</p>
+<figure class="tall"><img src="img/05-ajouter-copilot.png" alt="Ajouter à Microsoft Copilot"><figcaption>Figure 6 — Page « Ajouter à votre assistant », onglet Microsoft Copilot</figcaption></figure>
+
+<h3 id="copilot">Microsoft Copilot (Microsoft 365 Copilot et Teams)</h3>
+<p>Microsoft Copilot ne se branche pas directement sur une URL MCP : il utilise un <strong>agent</strong> créé dans <strong>Copilot Studio</strong>, auquel on ajoute le Serveur MCP comme <strong>outil</strong>. En pratique :</p>
+<ul>
+  <li>un <strong>administrateur</strong> (ou un créateur d’agents) crée l’agent <strong>une seule fois</strong> pour une base et le publie dans Microsoft 365 Copilot ;</li>
+  <li>chaque <strong>collaborateur</strong> ouvre ensuite cet agent dans Copilot et autorise son propre compte lors de la première question.</li>
+</ul>
+
+<h4>Créer l’agent (une fois)</h4>
+<ol class="steps">
+  <li>Ouvrez <strong>copilotstudio.microsoft.com</strong> avec votre compte professionnel et vérifiez, en haut à droite, que l’<strong>environnement</strong> de l’entreprise est sélectionné.</li>
+  <li>Créez un agent dédié à la base (<strong>+ Créer → Nouvel agent</strong>), par exemple « Assistant Ventes ». Dans ses <strong>Paramètres → IA générative</strong>, choisissez l’<strong>orchestration générative</strong>.</li>
+  <li>Onglet <strong>Outils → + Ajouter un outil → + Nouvel outil → Model Context Protocol</strong>.</li>
+  <li>Renseignez un <strong>nom</strong> (« Base Ventes »), une <strong>description</strong> qui aide l’IA à savoir quand utiliser l’outil (« Interroge la base Ventes en lecture seule : tables, structure, requêtes ») et l’<strong>URL MCP</strong> copiée depuis le serveur.</li>
+  <li><strong>Authentification : OAuth 2.0 → Découverte dynamique</strong>, puis <strong>Créer</strong>.</li>
+  <li><strong>Créer une connexion</strong> : la page du Serveur MCP s’ouvre ; connectez-vous et cliquez sur <strong>Autoriser</strong> (voir 4.5). Cliquez ensuite sur <strong>Ajouter à l’agent</strong>.</li>
+  <li>Dans les paramètres de l’outil, réglez l’authentification sur <strong>l’utilisateur final</strong> : chaque collaborateur interrogera la base avec <em>ses</em> droits, et non avec ceux du créateur de l’agent.</li>
+  <li>Testez dans le volet <strong>Tester</strong> (« Quelles tables contient la base Ventes ? »), puis <strong>Publiez</strong> et ajoutez le canal <strong>Microsoft 365 Copilot et Teams</strong>.</li>
+</ol>
+<div class="warn"><p><span class="label">Agent Builder ou Copilot Studio ?</span>Le bouton « Créer un agent » de Microsoft 365 Copilot ouvre <strong>Agent Builder</strong>, une version simplifiée qui n’a pas d’onglet <strong>Outils</strong> et ne gère pas le MCP. Utilisez <strong>Copilot Studio</strong> (copilotstudio.microsoft.com). Une licence ou un essai Copilot Studio peut être nécessaire, ainsi que le droit de créer des connecteurs personnalisés dans l’environnement.</p></div>
+<div class="note"><p><span class="label">Instructions conseillées pour l’agent.</span>« Tu réponds aux questions sur la base Ventes. Commence par lister les tables et décrire celles qui sont utiles avant d’écrire une requête. Présente les résultats sous forme de tableau et indique la période ou les filtres utilisés. »</p></div>
+
+<h4>Utiliser l’agent (chaque collaborateur)</h4>
+<ol class="steps">
+  <li>Dans Microsoft 365 Copilot (application Copilot, Teams ou Outlook), ouvrez l’agent depuis la liste des <strong>Agents</strong> (ou via <strong>Obtenir des agents</strong> s’il n’y figure pas encore).</li>
+  <li>À la première question, Copilot demande de vous connecter : cliquez sur <strong>Se connecter</strong> ou <strong>Autoriser</strong>. La page du Serveur MCP s’ouvre : connectez-vous avec <em>votre</em> compte et cliquez sur <strong>Autoriser</strong>.</li>
+  <li>Posez vos questions directement dans la conversation avec l’agent.</li>
+</ol>
+<p>Vous devez avoir accès à la connexion sur le Serveur MCP (connexion attribuée par un administrateur) : sinon, l’agent répond que vous n’avez pas accès à cette base.</p>
+
+<h3>Claude (claude.ai ou Claude Desktop)</h3>
+<ol class="steps">
+  <li>Dans Claude, ouvrez <strong>Paramètres → Connecteurs</strong>.</li>
+  <li>Cliquez sur <strong>Ajouter un connecteur personnalisé</strong>, donnez-lui un nom (par exemple « Ventes ») et collez l’URL MCP.</li>
+  <li>Cliquez sur <strong>Se connecter</strong> : la page du Serveur MCP s’ouvre. Connectez-vous, puis cliquez sur <strong>Autoriser</strong> (voir 4.5).</li>
+  <li>Dans une conversation, activez le connecteur depuis le menu <strong>Outils</strong> (ou « Rechercher et outils »).</li>
+</ol>
+<div class="note"><p>Selon votre abonnement Claude, l’ajout de connecteurs personnalisés peut être réservé aux propriétaires de l’espace de travail. Rapprochez-vous de votre administrateur si l’option n’apparaît pas.</p></div>
+
+<h3>ChatGPT</h3>
+<figure class="medium"><img src="img/06-ajouter-chatgpt.png" alt="Ajouter à ChatGPT"><figcaption>Figure 7 — Onglet ChatGPT</figcaption></figure>
+<ol class="steps">
+  <li>Ouvrez <strong>Paramètres → Applications et connecteurs → Paramètres avancés</strong> et activez le <strong>Mode développeur</strong>.</li>
+  <li>Revenez à <strong>Applications et connecteurs</strong>, puis cliquez sur <strong>Créer</strong>.</li>
+  <li>Collez l’URL MCP, choisissez <strong>Authentification : OAuth</strong> et validez.</li>
+  <li>Connectez-vous sur la page qui s’ouvre, puis cliquez sur <strong>Autoriser</strong>.</li>
+</ol>
+<p>Les intitulés des menus de ChatGPT et de Copilot évoluent régulièrement ; l’onglet correspondant de la page du serveur indique la procédure à suivre.</p>
+
+<h3>Autres outils</h3>
+<table>
+  <tr><th style="width:25%">Outil</th><th>Procédure (détaillée dans l’onglet correspondant)</th></tr>
+  <tr><td>Claude Code</td><td>Commande <code>claude mcp add --transport http …</code>, puis <code>/mcp</code> → <strong>Authenticate</strong>.</td></tr>
+  <tr><td>Cursor</td><td>Bloc à ajouter dans <code>~/.cursor/mcp.json</code>, puis <strong>Login</strong> dans les réglages MCP.</td></tr>
+  <tr><td>Autres (stdio)</td><td>Pour les outils qui ne gèrent pas les serveurs distants : passerelle <code>mcp-remote</code> (nécessite Node.js).</td></tr>
+</table>
+
+<h3>L’écran « Autoriser l’accès »</h3>
+<p>Lors du premier branchement, l’assistant ouvre cette page du Serveur MCP. Elle indique <strong>quel assistant</strong> demande l’accès, <strong>quelle connexion</strong> et <strong>avec quel compte</strong>.</p>
+<figure class="small"><img src="img/08-autorisation.png" alt="Autoriser l'accès"><figcaption>Figure 8 — Demande d’autorisation d’un assistant</figcaption></figure>
+<ul>
+  <li><strong>Autoriser</strong> : l’assistant peut utiliser, en votre nom, les connexions auxquelles vous avez accès. Vous revenez ensuite dans l’assistant.</li>
+  <li><strong>Refuser</strong> : aucun accès n’est accordé.</li>
+</ul>
+<div class="danger"><p><span class="label">N’autorisez que ce que vous venez de demander.</span>Si cette page s’affiche alors que vous n’êtes pas en train d’ajouter un connecteur, cliquez sur <strong>Refuser</strong> et prévenez un administrateur.</p></div>
+<p>L’autorisation reste valable tant que vous l’utilisez (elle est renouvelée automatiquement). Vous pouvez la retirer à tout moment depuis <strong>Mon compte</strong>.</p>
+
+<h2 id="questions">Poser des questions sur les données</h2>
+<p>Une fois la connexion ajoutée et activée, posez simplement vos questions dans la conversation. L’assistant explore d’abord la structure de la base (tables, colonnes), puis construit les requêtes nécessaires.</p>
+
+<h3>Exemples de questions</h3>
+<div class="two-col">
+  <div>
+    <h4>Pour découvrir une base</h4>
+    <ul>
+      <li>« Quelles informations contient la base Ventes ? »</li>
+      <li>« Décris-moi la table des factures. »</li>
+      <li>« Quels sont les liens entre clients, commandes et produits ? »</li>
+    </ul>
+  </div>
+  <div>
+    <h4>Pour analyser</h4>
+    <ul>
+      <li>« Quel est le chiffre d’affaires par mois en 2026 ? »</li>
+      <li>« Quels sont nos 10 meilleurs clients cette année ? »</li>
+      <li>« Quels articles sont sous le seuil de réapprovisionnement ? »</li>
+      <li>« Compare les ventes du trimestre avec le même trimestre l’an dernier, sous forme de tableau. »</li>
+    </ul>
+  </div>
+</div>
+
+<h3>Conseils pour de bonnes réponses</h3>
+<ul>
+  <li><strong>Précisez le périmètre</strong> : période, agence, pays, type de produit…</li>
+  <li><strong>Demandez le format voulu</strong> : tableau, liste, synthèse, graphique, fichier CSV.</li>
+  <li><strong>Vérifiez les chiffres importants</strong> : demandez à l’assistant d’afficher la requête utilisée ou le détail du calcul. Une IA peut se tromper dans l’interprétation d’une colonne.</li>
+  <li><strong>Procédez par étapes</strong> sur les sujets complexes : d’abord comprendre les données, ensuite les analyser.</li>
+</ul>
+
+<h3>Limites à connaître</h3>
+<table>
+  <tr><th style="width:35%">Limite</th><th>Conséquence</th></tr>
+  <tr><td>Nombre de lignes par réponse</td><td>Chaque requête renvoie au plus 200 lignes (valeur réglée par connexion). Pour de gros volumes, demandez des totaux ou des regroupements plutôt que des listes complètes.</td></tr>
+  <tr><td>Lecture seule</td><td>Toute tentative de modification est refusée par le serveur, même si l’assistant essaie.</td></tr>
+  <tr><td>Durée des requêtes</td><td>Une requête trop longue (plus de 30 secondes) est interrompue : affinez la question.</td></tr>
+  <tr><td>Connexions en écriture</td><td>L’assistant doit vous demander confirmation avant toute modification. Lisez attentivement ce qu’il propose avant d’accepter.</td></tr>
+</table>
+<div class="warn"><p><span class="label">Confidentialité.</span>Les résultats des requêtes sont transmis à l’assistant que vous utilisez (Copilot, Claude, ChatGPT) pour qu’il puisse vous répondre. N’utilisez que les assistants validés par l’entreprise, avec un compte professionnel.</p></div>
+
+<h2 id="compte">Votre compte</h2>
+<p>L’onglet <strong>Mon compte</strong> regroupe :</p>
+<ul>
+  <li><strong>Assistants autorisés</strong> : les applications (Claude, ChatGPT…) qui peuvent interroger vos connexions en votre nom, avec la date de la dernière autorisation. Le bouton <strong>Déconnecter</strong> retire immédiatement l’accès ; l’assistant devra être autorisé de nouveau.</li>
+  <li><strong>Changer mon mot de passe</strong> : mot de passe actuel, puis nouveau mot de passe (10 caractères minimum).</li>
+</ul>
+<figure class="tall"><img src="img/09-mon-compte.png" alt="Mon compte"><figcaption>Figure 9 — Mon compte</figcaption></figure>
+<div class="tip"><p>Déconnectez un assistant que vous n’utilisez plus, ou en cas de doute (ordinateur perdu, compte d’assistant partagé par erreur…).</p></div>
+
+<h2 id="admin">Administration (administrateurs)</h2>
+<p>Les administrateurs voient l’onglet supplémentaire <strong>Utilisateurs</strong> et l’ensemble des connexions.</p>
+
+<h3>Rôles</h3>
+<table>
+  <tr><th style="width:28%"></th><th>Administrateur</th><th>Utilisateur</th></tr>
+  <tr><td>Connexions visibles</td><td>Toutes</td><td>Celles qui lui sont attribuées</td></tr>
+  <tr><td>Déclarer, modifier, supprimer une connexion</td><td>Oui</td><td>—</td></tr>
+  <tr><td>Attribuer une connexion</td><td>Oui</td><td>—</td></tr>
+  <tr><td>Gérer les comptes</td><td>Inviter, réinitialiser, nommer administrateur, désactiver, supprimer, déconnecter les assistants</td><td>Son mot de passe et ses assistants</td></tr>
+</table>
+
+<h3>Inviter un utilisateur</h3>
+<ol class="steps">
+  <li>Onglet <strong>Utilisateurs</strong> → saisissez l’<strong>e-mail</strong> (et le nom, facultatif).</li>
+  <li>Cliquez sur <strong>Créer et envoyer l’invitation</strong>. L’utilisateur reçoit le lien d’activation par e-mail.</li>
+  <li>Si l’e-mail n’arrive pas, ouvrez <strong>Afficher le lien</strong> et transmettez-le par un canal de confiance (messagerie interne, en main propre).</li>
+</ol>
+<figure class="tall"><img src="img/13-admin-utilisateurs.png" alt="Utilisateurs"><figcaption>Figure 10 — Page Utilisateurs après l’envoi d’une invitation</figcaption></figure>
+<p>Selon la situation, un bandeau indique le résultat de l’envoi :</p>
+<ul>
+  <li><span class="badge ok">vert</span> l’e-mail est parti ;</li>
+  <li><span class="badge error">rouge</span> l’envoi a échoué (problème de messagerie) : transmettez le lien affiché et prévenez l’équipe informatique ;</li>
+  <li><span class="badge warn">orange</span> l’envoi d’e-mails n’est pas configuré sur le serveur : transmettez le lien affiché.</li>
+</ul>
+
+<h3>Gérer les comptes</h3>
+<table>
+  <tr><th style="width:32%">Action</th><th>Effet</th></tr>
+  <tr><td><strong>Renvoyer l’invitation</strong></td><td>Nouveau lien (l’ancien devient invalide), envoyé par e-mail.</td></tr>
+  <tr><td><strong>Réinitialiser le mot de passe</strong></td><td>Envoie un lien pour choisir un nouveau mot de passe. L’ancien reste valable jusqu’à l’utilisation du lien.</td></tr>
+  <tr><td><strong>Nommer administrateur</strong> / <strong>Retirer le rôle admin</strong></td><td>Change le rôle du compte.</td></tr>
+  <tr><td><strong>Désactiver</strong> / <strong>Réactiver</strong></td><td>Désactiver coupe <em>immédiatement</em> les sessions et tous les assistants du compte.</td></tr>
+  <tr><td><strong>Déconnecter ses assistants</strong></td><td>Révoque toutes les autorisations d’assistants du compte.</td></tr>
+  <tr><td><strong>Supprimer</strong></td><td>Supprime définitivement le compte et ses accès.</td></tr>
+</table>
+<p>Un administrateur ne peut ni modifier son propre rôle, ni se désactiver, ni se supprimer : cela évite de se retrouver sans administrateur.</p>
+
+<h3>Déclarer une base de données</h3>
+<p>Onglet <strong>Connexions → + Nouvelle connexion</strong>. Utilisez de préférence un <strong>compte de base de données en lecture seule</strong>, fourni par l’équipe informatique.</p>
+<figure class="tall"><img src="img/12-admin-nouvelle-connexion.png" alt="Nouvelle connexion"><figcaption>Figure 11 — Formulaire « Nouvelle connexion », après un test réussi</figcaption></figure>
+<ol class="steps">
+  <li><strong>Choisissez le type</strong> de base : MySQL / MariaDB, SQL Server, PostgreSQL, Redis (et MongoDB si le serveur le permet).</li>
+  <li><strong>Nommez</strong> la connexion de façon explicite, par exemple « Comptabilité (production) ».</li>
+  <li><strong>Renseignez les paramètres</strong> transmis par l’équipe informatique : hôte, port, base de données, utilisateur, mot de passe. Vous pouvez aussi coller une <strong>chaîne de connexion</strong> complète (onglet du même nom).</li>
+  <li><strong>Options</strong> : laissez <strong>Lecture seule</strong> cochée sauf besoin explicite ; cochez <strong>SSL / TLS</strong> pour les bases hébergées dans le cloud ; ajustez le nombre maximal de lignes ; fixez éventuellement une date d’expiration.</li>
+  <li>Cliquez sur <strong>Tester la connexion</strong> : le message « Connexion réussie » doit s’afficher avec la version du serveur.</li>
+  <li>Cliquez sur <strong>Créer la connexion</strong> : son URL MCP s’affiche, prête à être attribuée.</li>
+</ol>
+<div class="note"><p>Les mots de passe enregistrés sont chiffrés et ne sont jamais réaffichés. Lors d’une modification, laissez le champ vide pour conserver le mot de passe existant. Modifier une connexion conserve son URL et les autorisations des assistants.</p></div>
+
+<h3>Attribuer l’accès aux utilisateurs</h3>
+<p>Une nouvelle connexion n’est utilisable que par les administrateurs tant qu’elle n’est attribuée à personne.</p>
+<ol class="steps">
+  <li>Dans l’onglet <strong>Connexions</strong>, dépliez <strong>Gérer l’accès</strong> sous la connexion.</li>
+  <li>Cochez les utilisateurs concernés, puis cliquez sur <strong>Enregistrer</strong>.</li>
+  <li>La base apparaît aussitôt dans leur page <strong>Mes connexions</strong>, avec son lien MCP.</li>
+</ol>
+<figure class="medium"><img src="img/11-admin-gerer-acces.png" alt="Gérer l'accès"><figcaption>Figure 12 — Attribution d’une connexion à des utilisateurs</figcaption></figure>
+<div class="tip"><p>Retirer un utilisateur prend effet <strong>immédiatement</strong> : ses assistants ne peuvent plus interroger cette connexion dès la requête suivante.</p></div>
+
+<h3>Supprimer une connexion</h3>
+<p>Le bouton <strong>Supprimer</strong> efface définitivement la connexion : son URL MCP cesse de fonctionner pour tous les assistants. Pour une suspension temporaire, retirez plutôt les utilisateurs dans <strong>Gérer l’accès</strong>.</p>
+
+<h2 id="faq">Questions fréquentes et problèmes</h2>
+<table>
+  <tr><th style="width:38%">Situation</th><th>Que faire</th></tr>
+  <tr><td>Je n’ai pas reçu l’e-mail d’invitation</td><td>Vérifiez les courriers indésirables, puis demandez à un administrateur de renvoyer l’invitation ou de vous transmettre le lien affiché à l’écran.</td></tr>
+  <tr><td>« Lien invalide » sur la page d’invitation</td><td>Le lien a expiré (7 jours) ou a déjà servi. Demandez un nouveau lien.</td></tr>
+  <tr><td>J’ai oublié mon mot de passe</td><td>Demandez un lien de réinitialisation à un administrateur.</td></tr>
+  <tr><td>« Trop de tentatives »</td><td>Attendez 15 minutes avant de réessayer.</td></tr>
+  <tr><td>Ma liste de connexions est vide</td><td>Aucune connexion ne vous est attribuée : contactez un administrateur.</td></tr>
+  <tr><td>L’assistant indique « Vous n’avez pas (ou plus) accès à cette connexion »</td><td>L’accès vous a été retiré ou votre compte est désactivé. Contactez un administrateur.</td></tr>
+  <tr><td>L’assistant indique « Cette connexion a expiré »</td><td>La date d’expiration est passée ; un administrateur doit recréer la connexion.</td></tr>
+  <tr><td>L’assistant redemande une autorisation</td><td>Normal après une déconnexion depuis « Mon compte », un changement de droits ou une longue inactivité (plus de 30 jours). Reconnectez-vous et cliquez sur <strong>Autoriser</strong>.</td></tr>
+  <tr><td>« Erreur : … » dans la réponse de l’assistant</td><td>La base a refusé la requête (syntaxe, droits, délai). Reformulez la question ; si le problème persiste, signalez le message exact à l’équipe informatique.</td></tr>
+  <tr><td>« Résultat tronqué »</td><td>La réponse était trop volumineuse : demandez un regroupement, un filtre ou moins de colonnes.</td></tr>
+  <tr><td>Copilot : pas d’onglet « Outils » dans mon agent</td><td>Vous êtes dans Agent Builder (« Créer un agent » de Microsoft 365 Copilot). Ouvrez l’agent dans <strong>Copilot Studio</strong> (copilotstudio.microsoft.com). Si l’onglet est masqué, élargissez la fenêtre ou ouvrez le menu « +N » au bout des onglets.</td></tr>
+  <tr><td>Copilot Studio : « Failed to login … invalid_redirect_uri »</td><td>Le domaine de retour de Microsoft n’est pas autorisé sur le serveur : un administrateur doit l’ajouter (<code>MCP_REDIRECT_DOMAINS</code>, voir la documentation technique).</td></tr>
+  <tr><td>Le test de connexion échoue</td><td>Vérifiez l’hôte, le port, le compte et le mot de passe. Le serveur de base doit être joignable depuis le Serveur MCP (pare-feu). Pour SQL Server avec instance nommée : <code>serveur\INSTANCE</code>.</td></tr>
+</table>
+
+<h2 id="securite">Bonnes pratiques de sécurité</h2>
+<ul>
+  <li><strong>Gardez votre mot de passe pour vous</strong> et choisissez-le long (une phrase de passe, par exemple).</li>
+  <li><strong>N’autorisez un assistant que lorsque vous venez de l’ajouter</strong> vous-même.</li>
+  <li><strong>Utilisez des comptes professionnels</strong> pour les assistants (Copilot, Claude, ChatGPT) validés par l’entreprise.</li>
+  <li><strong>Préférez la lecture seule.</strong> N’activez l’écriture qu’en cas de besoin réel, et relisez chaque modification proposée par l’assistant.</li>
+  <li><strong>Déconnectez les assistants inutilisés</strong> depuis « Mon compte ».</li>
+  <li><strong>Signalez</strong> toute activité inhabituelle à un administrateur.</li>
+</ul>
+<div class="note"><p><span class="label">Bon à savoir.</span>Le serveur vérifie vos droits à <strong>chaque</strong> question posée par l’assistant. Retirer un accès, désactiver un compte ou déconnecter un assistant prend effet immédiatement.</p></div>
+
+</main>
+</body>
+</html>

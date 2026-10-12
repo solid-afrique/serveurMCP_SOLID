@@ -20,12 +20,23 @@
         <h3>Ajouter à votre assistant</h3>
         <div data-tabs>
             <div class="tabs" role="tablist">
-                @foreach (['claude' => 'Claude', 'chatgpt' => 'ChatGPT', 'vscode' => 'Copilot (VS Code)', 'claude-code' => 'Claude Code', 'cursor' => 'Cursor', 'stdio' => 'Autres (stdio)'] as $key => $label)
+                @foreach (['copilot' => 'Microsoft Copilot', 'claude' => 'Claude', 'chatgpt' => 'ChatGPT', 'claude-code' => 'Claude Code', 'cursor' => 'Cursor', 'stdio' => 'Autres (stdio)'] as $key => $label)
                     <button type="button" class="tab {{ $loop->first ? 'active' : '' }}" data-tab="{{ $key }}">{{ $label }}</button>
                 @endforeach
             </div>
 
-            <div data-panel="claude">
+            <div data-panel="copilot">
+                <p class="hint">Microsoft 365 Copilot (et Teams) passe par un <b>agent Copilot Studio</b>. Si votre entreprise a déjà publié un agent pour cette base, ouvrez-le simplement dans Copilot et cliquez sur <b>Autoriser</b> à la première question.</p>
+                <ol class="steps">
+                    <li>Ouvrez <b>copilotstudio.microsoft.com</b> (et non « Créer un agent » dans Copilot : ce générateur simplifié ne gère pas le MCP), puis ouvrez ou créez votre agent.</li>
+                    <li><b>Outils → Ajouter un outil → Nouvel outil → Model Context Protocol</b>.</li>
+                    <li>Collez l’URL MCP, choisissez <b>OAuth 2.0 → Découverte dynamique</b>, puis <b>Créer</b>.</li>
+                    <li><b>Créer une connexion</b> : connectez-vous sur la page qui s’ouvre, cliquez sur <b>Autoriser</b>, puis <b>Ajouter à l’agent</b>.</li>
+                    <li><b>Publiez</b> l’agent sur le canal <b>Microsoft 365 Copilot et Teams</b> : il apparaît dans Copilot, rubrique <b>Agents</b>.</li>
+                </ol>
+                <p class="hint">Agent partagé : réglez l’authentification de l’outil sur <b>l’utilisateur final</b>, pour que chaque collaborateur interroge la base avec ses propres droits.</p>
+            </div>
+            <div data-panel="claude" hidden>
                 <ol class="steps">
                     <li>Sur claude.ai ou Claude Desktop, ouvrez <b>Paramètres → Connecteurs</b>.</li>
                     <li>Cliquez sur <b>Ajouter un connecteur personnalisé</b>, donnez-lui un nom et collez l’URL MCP.</li>
@@ -40,11 +51,6 @@
                     <li>Collez l’URL MCP, choisissez <b>Authentification : OAuth</b> et validez.</li>
                     <li>Connectez-vous avec votre compte sur la page qui s’ouvre, puis cliquez sur <b>Autoriser</b>.</li>
                 </ol>
-            </div>
-            <div data-panel="vscode" hidden>
-                <p class="hint">Ajoutez ceci à <code>.vscode/mcp.json</code>. Au démarrage du serveur, VS Code ouvre la page d’autorisation dans le navigateur.</p>
-                @include('connections.partials.snippet', ['text' => json_encode(['servers' => [$slug => ['type' => 'http', 'url' => $url]]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)])
-                <p class="hint">Copilot Studio : <b>Outils → Ajouter un outil → Model Context Protocol</b>, URL ci-dessus, authentification OAuth 2.0 (enregistrement dynamique).</p>
             </div>
             <div data-panel="claude-code" hidden>
                 @include('connections.partials.snippet', ['text' => "claude mcp add --transport http {$slug} \"{$url}\""])

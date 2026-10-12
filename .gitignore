@@ -28,3 +28,7 @@ Thumbs.db
 
 # Paquets de déploiement (deploy/package.ps1)
 /dist
+
+# Génération de la documentation (docs/source)
+/docs/source/node_modules
+/docs/source/package-lock.json

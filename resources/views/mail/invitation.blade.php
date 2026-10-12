@@ -10,7 +10,7 @@ Choisir un nouveau mot de passe
 
 Votre mot de passe actuel reste valable tant que ce lien n’a pas été utilisé.
 @else
-{{ $sender?->name ?? 'Un administrateur' }} vous invite à utiliser le **{{ config('app.name') }}**, qui permet d’interroger les bases de données de l’entreprise depuis Claude, ChatGPT ou GitHub Copilot.
+{{ $sender?->name ?? 'Un administrateur' }} vous invite à utiliser le **{{ config('app.name') }}**, qui permet d’interroger les bases de données de l’entreprise depuis Claude, ChatGPT ou Microsoft Copilot.
 
 <x-mail::button :url="$url">
 Activer mon compte

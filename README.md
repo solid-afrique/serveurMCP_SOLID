@@ -9,6 +9,14 @@ Serveur [MCP](https://modelcontextprotocol.io) qui permet à **Claude, ChatGPT, 
 
 > L'ancienne version Next.js est archivée dans la branche `archive/nextjs` (étiquette `nextjs-v1`).
 
+## Documentation
+
+- [Guide utilisateur (PDF)](docs/Guide-utilisateur-Serveur-MCP.pdf) : collaborateurs et administrateurs, avec captures d'écran.
+- [Documentation technique (PDF)](docs/Documentation-technique-Serveur-MCP.pdf) : architecture, sécurité, configuration, déploiement, exploitation.
+- [Présentation (PowerPoint)](docs/Presentation-Serveur-MCP.pptx) : présentation non technique de la solution.
+
+Sources dans `docs/source` (HTML + captures) ; régénération : `npm install` puis `npm run pdf` et `npm run pptx` dans ce dossier (Microsoft Edge requis pour les PDF).
+
 ## Fonctionnement
 
 ```
@@ -81,4 +89,5 @@ app/Http/Controllers/                  Interface : connexions, utilisateurs, com
 resources/views/                       Pages Blade (dont mcp/authorize : consentement OAuth)
 routes/ai.php                          Routes MCP et OAuth ; routes/web.php : interface
 deploy/                                Paquet IIS, guide de déploiement, scripts SQL
+docs/                                  Guide utilisateur, documentation technique, présentation (et leurs sources)
 ```

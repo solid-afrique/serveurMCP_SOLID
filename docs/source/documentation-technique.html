@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Documentation technique — Serveur MCP</title>
+<link rel="stylesheet" href="style.css">
+<style>@page { @bottom-left { content: "Serveur MCP — Documentation technique"; } }</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="kicker">SOLID Afrique · Serveur MCP</div>
+  <h1>Documentation technique</h1>
+  <p class="subtitle">Architecture, sécurité, configuration, déploiement sur IIS et exploitation du serveur MCP d’accès aux bases de données.</p>
+  <div class="spacer"></div>
+  <dl class="meta">
+    <dt>Public</dt><dd>Équipe informatique : développeurs, administrateurs système et bases de données</dd>
+    <dt>Version</dt><dd>1.0 — octobre 2026</dd>
+    <dt>Code source</dt><dd>github.com/solid-afrique/serveurMCP_SOLID (branche main)</dd>
+    <dt>Pile</dt><dd>Laravel 13 · PHP 8.3 · MySQL · IIS (FastCGI)</dd>
+  </dl>
+</section>
+
+<section class="toc">
+  <h1 style="font-size:20pt;margin:0 0 6mm">Sommaire</h1>
+  <ol>
+    <li><a href="#perimetre">Objet et périmètre</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#mcp">Serveur MCP et outils</a></li>
+    <li><a href="#auth">Authentification et autorisation</a></li>
+    <li><a href="#securite">Protection des données</a></li>
+    <li><a href="#donnees">Modèle de données</a></li>
+    <li><a href="#config">Configuration</a></li>
+    <li><a href="#deploiement">Déploiement sur IIS</a></li>
+    <li><a href="#exploitation">Exploitation et dépannage</a></li>
+    <li><a href="#dev">Développement et tests</a></li>
+    <li><a href="#annexe">Annexe : routes HTTP</a></li>
+  </ol>
+  <div class="note" style="margin-top:10mm">
+    <p>Le guide pas à pas de l’installation se trouve dans le dépôt : <code>deploy/DEPLOIEMENT-IIS.md</code> (inclus dans chaque paquet de déploiement). Le présent document en reprend l’essentiel et le complète par la description du fonctionnement interne.</p>
+  </div>
+</section>
+
+<main>
+
+<h2 id="perimetre" class="first">Objet et périmètre</h2>
+<p>Le Serveur MCP expose des bases de données de l’entreprise à des assistants d’intelligence artificielle via le <strong>Model Context Protocol</strong> (MCP), standard ouvert qui permet à un assistant d’appeler des « outils » distants. Il comprend :</p>
+<ul>
+  <li>un <strong>serveur MCP</strong> distant (transport <em>Streamable HTTP</em>), avec <strong>une URL par connexion</strong> de base de données ;</li>
+  <li>un <strong>serveur d’autorisation OAuth 2.1</strong> : chaque assistant agit avec le compte de son utilisateur ;</li>
+  <li>une <strong>interface web d’administration</strong> : connexions, utilisateurs, rôles, attribution des accès.</li>
+</ul>
+
+<table>
+  <tr><th style="width:30%">Élément</th><th>Prise en charge</th></tr>
+  <tr><td>Bases relationnelles</td><td>MySQL 5.7+ / MariaDB, Microsoft SQL Server (2012+, Azure SQL), PostgreSQL</td></tr>
+  <tr><td>Bases non relationnelles</td><td>MongoDB (si l’extension PHP <code>mongodb</code> est installée), Redis</td></tr>
+  <tr><td>Clients MCP testés</td><td>Microsoft 365 Copilot et Teams (via un agent Copilot Studio), Claude (claude.ai, Desktop, Claude Code), ChatGPT (mode développeur), Cursor ; tout client MCP gérant OAuth (ou via <code>mcp-remote</code>)</td></tr>
+  <tr><td>Hébergement</td><td>Windows Server + IIS (PHP en FastCGI), base MySQL pour les données de l’application</td></tr>
+  <tr><td>Historique</td><td>Une première version Next.js est archivée (branche <code>archive/nextjs</code>, étiquette <code>nextjs-v1</code>). La version actuelle est une réécriture complète en Laravel.</td></tr>
+</table>
+
+<h2 id="architecture">Architecture</h2>
+
+<h3>Vue d’ensemble</h3>
+<div class="diagram">
+  <div class="box"><h5>Assistants IA</h5><ul><li>Claude, ChatGPT</li><li>Copilot, Cursor…</li><li>Client MCP + OAuth</li></ul></div>
+  <div class="arrow">HTTPS<br>POST /mcp/{id}<br>Bearer</div>
+  <div class="box"><h5>IIS · site « mcp-server »</h5><ul><li>URL Rewrite → <code>public/index.php</code></li><li>PHP 8.3 NTS (FastCGI)</li><li>Laravel 13 : MCP, OAuth, interface</li></ul></div>
+  <div class="arrow">PDO / drivers<br>réseau interne</div>
+  <div class="box alt"><h5>Bases de données</h5><ul><li>MySQL <code>mcp_server</code> (application)</li><li>Bases métiers : MySQL, SQL Server, PostgreSQL, MongoDB, Redis</li></ul></div>
+</div>
+<p>Les bases métiers ne sont <strong>pas exposées</strong> sur Internet : seul le site IIS doit être joignable depuis l’extérieur, car Claude et ChatGPT appellent le serveur MCP depuis leurs propres infrastructures. Le serveur MCP joint ensuite les bases par le réseau interne.</p>
+
+<h3>Pile logicielle</h3>
+<table>
+  <tr><th style="width:30%">Composant</th><th style="width:22%">Version</th><th>Rôle</th></tr>
+  <tr><td>PHP</td><td>8.3 ou 8.4 (NTS x64)</td><td>Exécution ; extensions requises : <code>pdo_mysql</code>, <code>sodium</code>, <code>openssl</code>, <code>mbstring</code>, <code>fileinfo</code>, <code>curl</code></td></tr>
+  <tr><td>Laravel</td><td>13</td><td>Framework applicatif (routes, Eloquent, chiffrement, sessions, e-mails)</td></tr>
+  <tr><td><code>laravel/mcp</code></td><td>1.x</td><td>Serveur MCP (transport Streamable HTTP, outils, découverte OAuth)</td></tr>
+  <tr><td><code>laravel/passport</code></td><td>13 (league/oauth2-server 9)</td><td>Serveur OAuth 2.1 : autorisation, PKCE, jetons, enregistrement dynamique</td></tr>
+  <tr><td><code>predis/predis</code></td><td>3.x</td><td>Client Redis en PHP pur</td></tr>
+  <tr><td><code>pdo_sqlsrv</code> + ODBC Driver 18</td><td>Microsoft</td><td>Accès SQL Server (facultatif)</td></tr>
+  <tr><td><code>pdo_pgsql</code>, <code>mongodb</code></td><td>PECL / PHP</td><td>PostgreSQL et MongoDB (facultatifs)</td></tr>
+  <tr><td>Interface</td><td>Blade + CSS/JS statiques</td><td>Pas de Node.js ni de compilation en production</td></tr>
+</table>
+
+<h3>Organisation du code</h3>
+<table>
+  <tr><th style="width:42%">Emplacement</th><th>Contenu</th></tr>
+  <tr><td><code>routes/ai.php</code></td><td>Routes MCP (<code>Mcp::web('/mcp/{connection}')</code>) et routes OAuth (<code>Mcp::oauthRoutes()</code>)</td></tr>
+  <tr><td><code>routes/web.php</code></td><td>Interface : connexion, invitations, connexions, utilisateurs, compte</td></tr>
+  <tr><td><code>app/Mcp/Servers/DatabaseServer.php</code></td><td>Serveur MCP : nom et instructions adaptés à la connexion</td></tr>
+  <tr><td><code>app/Mcp/Tools/</code></td><td>Outils (<code>Sql/</code>, <code>Mongo/</code>, <code>Redis/</code>, <code>ConnectionInfo</code>) ; classe de base <code>DatabaseTool</code></td></tr>
+  <tr><td><code>app/Http/Middleware/AuthorizeMcpConnection.php</code></td><td>Contrôle d’accès à chaque requête MCP</td></tr>
+  <tr><td><code>app/Services/Databases/</code></td><td>Accès aux bases : <code>SqlDatabase</code> (PDO), <code>MongoDatabase</code>, <code>RedisDatabase</code>, <code>ConnectionParameters</code>, <code>SqlGuard</code></td></tr>
+  <tr><td><code>app/Models/</code></td><td><code>User</code>, <code>DatabaseConnection</code>, <code>Invitation</code></td></tr>
+  <tr><td><code>app/Http/Controllers/</code></td><td>Interface web (connexions, utilisateurs, compte, invitations, authentification)</td></tr>
+  <tr><td><code>app/Mail/InvitationMail.php</code></td><td>E-mail d’invitation / réinitialisation</td></tr>
+  <tr><td><code>app/Console/Commands/</code></td><td><code>mcp:admin</code>, <code>mcp:mail-test</code></td></tr>
+  <tr><td><code>resources/views/</code></td><td>Pages Blade, dont <code>mcp/authorize</code> (consentement OAuth)</td></tr>
+  <tr><td><code>deploy/</code></td><td><code>package.ps1</code>, <code>DEPLOIEMENT-IIS.md</code>, scripts SQL</td></tr>
+  <tr><td><code>public/web.config</code></td><td>Configuration IIS (réécriture, erreurs, WebDAV, limites)</td></tr>
+</table>
+
+<h2 id="mcp">Serveur MCP et outils</h2>
+
+<h3>Point d’accès</h3>
+<ul>
+  <li><strong>URL</strong> : <code>https://luxewtey.com/mcpsolid/mcp/{connection}</code>, où <code>{connection}</code> est l’identifiant aléatoire (16 caractères) de la connexion.</li>
+  <li><strong>Transport</strong> : Streamable HTTP <strong>sans état</strong> ; chaque message JSON-RPC est une requête <code>POST</code>. <code>GET</code> et <code>DELETE</code> renvoient <code>405</code> (pas de flux SSE serveur ni de session).</li>
+  <li><strong>Chaîne de traitement</strong> : <code>auth:api</code> (jeton Passport) → <code>AuthorizeMcpConnection</code> → <code>DatabaseServer</code> → outil.</li>
+</ul>
+
+<h3>Traitement d’une requête</h3>
+<ol class="flow">
+  <li><span class="who">auth:api</span> — vérifie le jeton d’accès (signature RSA, expiration, révocation). Sans jeton valide : <code>401</code> avec l’en-tête <code>WWW-Authenticate</code> et <code>resource_metadata</code>, qui déclenche la découverte OAuth côté client.</li>
+  <li><span class="who">AuthorizeMcpConnection</span> — charge la connexion (<code>404</code> si inconnue), vérifie que le titulaire du jeton est actif et y a accès (<code>403</code> sinon), que la connexion n’a pas expiré (<code>403</code>), puis met à jour <code>last_used_at</code> (au plus une fois par minute).</li>
+  <li><span class="who">DatabaseServer::boot</span> — fixe le nom du serveur et des instructions destinées au modèle : type de base, mode lecture seule, limite de lignes, consigne d’explorer la structure avant d’écrire des requêtes.</li>
+  <li><span class="who">Outil</span> — n’est exposé que s’il correspond au type de base et au mode (<code>DatabaseTool::shouldRegister</code>) ; ouvre la base, exécute, sérialise en JSON. Les annotations MCP (<code>readOnlyHint</code>, <code>destructiveHint</code>) sont renseignées.</li>
+</ol>
+
+<h3>Outils exposés</h3>
+<table>
+  <tr><th style="width:18%">Base</th><th style="width:41%">Lecture</th><th>Écriture (connexion non lecture seule)</th></tr>
+  <tr><td>Toutes</td><td><code>connection_info</code> : type, nom, mode, version</td><td>—</td></tr>
+  <tr><td class="wrap">MySQL, SQL Server, PostgreSQL</td><td class="wrap"><code>list_tables</code>, <code>describe_table</code> (colonnes, clés primaires / étrangères / uniques), <code>run_query</code> (paramètres <code>?</code>)</td><td class="wrap"><code>execute_statement</code> (INSERT, UPDATE, DELETE, DDL ; confirmation demandée à l’utilisateur)</td></tr>
+  <tr><td>MongoDB</td><td class="wrap"><code>list_databases</code>, <code>list_collections</code>, <code>describe_collection</code> (schéma déduit d’un échantillon, index), <code>find</code>, <code>count_documents</code>, <code>aggregate</code></td><td class="wrap"><code>insert_documents</code>, <code>update_documents</code>, <code>delete_documents</code> ; <code>$out</code> / <code>$merge</code> dans <code>aggregate</code></td></tr>
+  <tr><td>Redis</td><td class="wrap"><code>scan_keys</code>, <code>get_key</code> (tous types, TTL), <code>server_info</code>, <code>run_command</code> (liste blanche de commandes de lecture)</td><td class="wrap"><code>run_command</code> (toutes commandes sauf liste noire)</td></tr>
+</table>
+
+<h3>Limites et formats</h3>
+<table>
+  <tr><th style="width:38%">Paramètre</th><th>Valeur</th></tr>
+  <tr><td>Lignes / documents par appel</td><td><code>max_rows</code> de la connexion : 200 par défaut, de 1 à 5 000</td></tr>
+  <tr><td>Taille de la réponse</td><td>100 000 caractères ; au-delà, le résultat est tronqué avec un message invitant à affiner la requête</td></tr>
+  <tr><td>Délai de connexion</td><td>10 s</td></tr>
+  <tr><td>Durée d’une requête SQL</td><td>30 s (<code>MAX_EXECUTION_TIME</code> MySQL, <code>max_statement_time</code> MariaDB, <code>statement_timeout</code> PostgreSQL, <code>QUERY_TIMEOUT</code> SQL Server)</td></tr>
+  <tr><td>Erreurs</td><td>Renvoyées à l’assistant sous forme de résultat d’outil en erreur (<code>Erreur : …</code>) ; aucune trace technique n’est exposée</td></tr>
+</table>
+
+<h2 id="auth">Authentification et autorisation</h2>
+
+<h3>Parcours de connexion d’un utilisateur</h3>
+<p>Un utilisateur s’authentifie deux fois, avec le <strong>même compte</strong> : sur l’interface web (session), puis, pour chaque assistant, par une autorisation OAuth. Le parcours complet :</p>
+<table>
+  <tr><th style="width:6%">#</th><th style="width:30%">Étape</th><th>Mécanisme</th></tr>
+  <tr><td>1</td><td><strong>Invitation</strong> (administrateur)</td><td><code>POST /users</code> crée le compte (<code>status = invited</code>, sans mot de passe) et envoie par e-mail le lien <code>https://luxewtey.com/mcpsolid/invitation/{jeton}</code> (usage unique, 7 jours). L’administrateur attribue les connexions (<code>PUT /connections/{id}/users</code>).</td></tr>
+  <tr><td>2</td><td><strong>Création du mot de passe</strong></td><td><code>GET/POST /invitation/{jeton}</code> : mot de passe (10 caractères minimum, bcrypt), <code>status = active</code>, jeton supprimé, session ouverte.</td></tr>
+  <tr><td>3</td><td><strong>Connexion à l’interface</strong></td><td><code>https://luxewtey.com/mcpsolid/login</code> : e-mail + mot de passe, session Laravel ; tentatives limitées (voir ci-dessous).</td></tr>
+  <tr><td>4</td><td><strong>Lien MCP</strong></td><td>Page <em>Mes connexions</em> : pour chaque connexion attribuée, l’URL <code>https://luxewtey.com/mcpsolid/mcp/{id}</code> à copier.</td></tr>
+  <tr><td>5</td><td><strong>Branchement de l’assistant</strong></td><td>L’assistant appelle l’URL MCP, reçoit <code>401</code>, découvre le serveur OAuth, s’enregistre, puis ouvre <code>/oauth/authorize</code> : l’utilisateur se connecte (session de l’étape 3) et clique sur <strong>Autoriser</strong>. L’assistant reçoit un jeton lié à ce compte (détails en 4.3).</td></tr>
+</table>
+<p>Pour Microsoft Copilot, l’étape 5 est réalisée une fois par l’administrateur dans Copilot Studio (agent publié, voir 4.5), puis chaque collaborateur autorise son propre compte à la première utilisation de l’agent.</p>
+
+<h3>Interface web</h3>
+<ul>
+  <li>Session Laravel (pilote <code>database</code>), cookie <code>Secure</code> en HTTPS, protection CSRF sur tous les formulaires.</li>
+  <li>Mots de passe hachés en <strong>bcrypt</strong> (12 tours), 10 caractères minimum.</li>
+  <li><strong>Limitation des tentatives</strong> : 10 échecs par couple IP + e-mail, et 100 échecs au total, sur 15 minutes. Une empreinte factice est vérifiée pour les comptes inconnus, afin que le temps de réponse ne révèle pas l’existence d’un compte.</li>
+  <li><strong>Invitations</strong> : jeton aléatoire de 48 caractères, dont seule l’empreinte SHA-256 est stockée ; usage unique ; 7 jours ; un nouveau lien invalide le précédent. Envoi par e-mail SMTP (<code>InvitationMail</code>) ; en mode <code>MAIL_MAILER=log</code>, rien n’est envoyé (pour ne pas écrire le lien dans les journaux) et le lien est affiché à l’administrateur.</li>
+  <li>Aucune inscription libre : les comptes sont créés par un administrateur, ou par la commande <code>php artisan mcp:admin</code>.</li>
+</ul>
+
+<h3>OAuth 2.1 pour les assistants</h3>
+<table>
+  <tr><th style="width:38%">Élément</th><th>Mise en œuvre</th></tr>
+  <tr><td>Métadonnées de la ressource (RFC 9728)</td><td><code>/.well-known/oauth-protected-resource/…</code></td></tr>
+  <tr><td>Métadonnées du serveur (RFC 8414)</td><td><code>/.well-known/oauth-authorization-server</code></td></tr>
+  <tr><td>Enregistrement dynamique (RFC 7591)</td><td><code>POST /oauth/register</code> : clients publics, sans secret</td></tr>
+  <tr><td>Autorisation</td><td><code>/oauth/authorize</code> : code d’autorisation + <strong>PKCE S256</strong> obligatoire ; écran de consentement <code>resources/views/mcp/authorize.blade.php</code></td></tr>
+  <tr><td>Jetons</td><td><code>/oauth/token</code> ; jeton d’accès (JWT signé RS256) valable <strong>1 heure</strong> ; jeton de rafraîchissement <strong>30 jours</strong></td></tr>
+  <tr><td>Portée</td><td><code>mcp:use</code></td></tr>
+  <tr><td>Adresses de retour autorisées</td><td><code>MCP_REDIRECT_DOMAINS</code> (par défaut : claude.ai, claude.com, chatgpt.com, chat.openai.com, vscode.dev, insiders.vscode.dev, global.consent.azure-apim.net pour Copilot Studio, localhost, 127.0.0.1) et schémas personnalisés <code>claude</code>, <code>cursor</code>, <code>vscode</code>, <code>vscode-insiders</code></td></tr>
+  <tr><td>Clés de signature</td><td><code>storage/oauth-private.key</code> et <code>storage/oauth-public.key</code> (<code>php artisan passport:keys</code>)</td></tr>
+</table>
+
+<h4>Déroulement d’une première connexion</h4>
+<ol class="flow">
+  <li><span class="who">Assistant</span> — <code>POST /mcp/{id}</code> sans jeton → <code>401</code> + <code>WWW-Authenticate: Bearer resource_metadata=…</code></li>
+  <li><span class="who">Assistant</span> — lit les métadonnées (RFC 9728 puis RFC 8414), s’enregistre via <code>/oauth/register</code>.</li>
+  <li><span class="who">Navigateur</span> — ouvre <code>/oauth/authorize</code> (avec <code>code_challenge</code> et <code>resource</code>) ; l’utilisateur se connecte si nécessaire, puis voit l’écran de consentement (nom du client, connexion visée, compte, domaine de retour).</li>
+  <li><span class="who">Utilisateur</span> — clique sur <strong>Autoriser</strong> → redirection vers l’assistant avec un code.</li>
+  <li><span class="who">Assistant</span> — échange le code + <code>code_verifier</code> contre les jetons, puis rejoue <code>POST /mcp/{id}</code> avec <code>Authorization: Bearer</code>.</li>
+</ol>
+
+<h3>Règles d’accès</h3>
+<table>
+  <tr><th style="width:30%">Règle</th><th>Implémentation</th></tr>
+  <tr><td>Déclarer / gérer une connexion</td><td><code>canBeManagedBy</code> : administrateurs</td></tr>
+  <tr><td>Utiliser une connexion (MCP)</td><td><code>canBeUsedBy</code> : compte actif <em>et</em> (administrateur <em>ou</em> attributaire via <code>connection_user</code>)</td></tr>
+  <tr><td>Attribution</td><td>Une connexion déclarée par un administrateur n’est utilisable que par les administrateurs tant qu’elle n’est attribuée à aucun utilisateur (<em>Gérer l’accès</em>)</td></tr>
+  <tr><td>Révocation</td><td>Vérifiée à <strong>chaque</strong> requête MCP : retrait d’attribution, désactivation de compte ou retrait de rôle prennent effet immédiatement. La désactivation supprime aussi les sessions et révoque jetons d’accès et de rafraîchissement.</td></tr>
+</table>
+<div class="note"><p>Une autorisation OAuth est accordée <strong>par utilisateur et par application</strong> (et non par connexion) : un assistant autorisé peut utiliser toutes les connexions auxquelles l’utilisateur a accès, dans la limite des URL qui lui ont été configurées.</p></div>
+
+<h3>Intégration Microsoft Copilot</h3>
+<p>Microsoft 365 Copilot (application Copilot, Teams, Outlook) n’accepte pas d’URL MCP directement : le serveur est ajouté comme <strong>outil MCP d’un agent Copilot Studio</strong>, publié ensuite sur le canal Microsoft 365 Copilot et Teams.</p>
+<table>
+  <tr><th style="width:34%">Élément</th><th>Mise en œuvre</th></tr>
+  <tr><td>Outil de création</td><td><strong>Copilot Studio</strong> (copilotstudio.microsoft.com) : <em>Outils → Ajouter un outil → Nouvel outil → Model Context Protocol</em>. L’« Agent Builder » intégré à Microsoft 365 Copilot ne gère pas le MCP.</td></tr>
+  <tr><td>Prérequis de l’agent</td><td>Orchestration générative activée ; licence ou essai Copilot Studio ; droit de créer des connecteurs personnalisés dans l’environnement Power Platform (aucune stratégie DLP ne doit les bloquer).</td></tr>
+  <tr><td>Authentification</td><td>OAuth 2.0 → <strong>Découverte dynamique</strong> : Copilot Studio lit les métadonnées RFC 9728 / 8414 et s’enregistre via <code>/oauth/register</code>, avec PKCE.</td></tr>
+  <tr><td>Adresse de retour</td><td><code>https://global.consent.azure-apim.net/redirect/…</code> (propre à chaque connecteur). Le domaine figure dans la liste par défaut de <code>MCP_REDIRECT_DOMAINS</code> ; une liste personnalisée dans <code>.env</code> doit le reprendre.</td></tr>
+  <tr><td>Identité utilisée</td><td>Configurer l’outil avec l’<strong>authentification de l’utilisateur final</strong> : chaque collaborateur autorise son propre compte et les règles d’accès du serveur s’appliquent à lui. Avec les identifiants du créateur, tous les utilisateurs de l’agent partageraient les droits de ce dernier.</td></tr>
+  <tr><td>Diffusion</td><td>Un agent par base (ou par domaine fonctionnel), publié par un administrateur ; les utilisateurs l’ouvrent depuis la liste des agents de Copilot et autorisent leur compte à la première utilisation.</td></tr>
+</table>
+
+<h2 id="securite">Protection des données</h2>
+
+<h3>Paramètres des connexions</h3>
+<ul>
+  <li>Stockés dans <code>database_connections.config</code> avec le cast <code>encrypted:array</code> : chiffrement <strong>AES-256-CBC</strong> + HMAC avec <code>APP_KEY</code>.</li>
+  <li>Les mots de passe et chaînes de connexion ne sont <strong>jamais renvoyés</strong> au navigateur (<code>publicConfig()</code> ne transmet que des indicateurs <code>has_password</code> / <code>has_connection_string</code>). En modification, un champ vide conserve le secret existant.</li>
+  <li><strong>Perte d’<code>APP_KEY</code> = perte des paramètres</strong> de toutes les connexions. La clé doit être sauvegardée hors du serveur et ne jamais être régénérée une fois des connexions créées.</li>
+</ul>
+
+<h3>Mode lecture seule</h3>
+<p>Une connexion en lecture seule n’expose pas les outils d’écriture, et chaque requête est en outre protégée à deux niveaux :</p>
+<table>
+  <tr><th style="width:22%">Niveau</th><th>Mécanisme</th></tr>
+  <tr><td>Transaction</td><td>MySQL : <code>START TRANSACTION READ ONLY</code> ; PostgreSQL : <code>BEGIN TRANSACTION READ ONLY</code> ; SQL Server : transaction systématiquement annulée (<code>ROLLBACK</code>).</td></tr>
+  <tr><td>Garde-fou SQL</td><td class="wrap"><code>SqlGuard</code> : une seule instruction (hors littéraux et commentaires), qui doit commencer par <code>SELECT</code>, <code>WITH</code>, <code>SHOW</code>, <code>EXPLAIN</code>, <code>DESCRIBE</code>, <code>VALUES</code> ou <code>TABLE</code> ; refus des mots-clés d’écriture ou dangereux (<code>INSERT</code>, <code>UPDATE</code>, <code>INTO</code>, <code>EXEC</code>, <code>xp_*</code>, <code>sp_*</code>, <code>OPENROWSET</code>, <code>LOAD_FILE</code>, <code>SLEEP</code>, <code>WAITFOR</code>…).</td></tr>
+  <tr><td>Pilote</td><td>MySQL : <code>MULTI_STATEMENTS</code> désactivé, requêtes préparées natives.</td></tr>
+  <tr><td>MongoDB</td><td>Seuls les outils de lecture sont exposés ; <code>$out</code> et <code>$merge</code> sont refusés dans <code>aggregate</code>.</td></tr>
+  <tr><td>Redis</td><td><code>run_command</code> limité à une liste blanche de commandes de lecture ; liste noire permanente (<code>SHUTDOWN</code>, <code>MONITOR</code>, <code>ACL</code>, <code>MODULE</code>, commandes bloquantes…).</td></tr>
+</table>
+<div class="warn"><p><span class="label">Défense en profondeur.</span>Ces protections ne remplacent pas les droits de la base. Utilisez des <strong>comptes de base en lecture seule</strong> dédiés : scripts <code>deploy/sql/mysql-lecteur.sql</code> et <code>deploy/sql/sqlserver-lecteur.sql</code>.</p></div>
+
+<h3>Autres mesures</h3>
+<ul>
+  <li><code>APP_DEBUG=false</code> en production : aucune trace d’erreur détaillée n’est renvoyée (les réponses MCP et OAuth sont toujours en JSON).</li>
+  <li>HTTPS obligatoire (<code>URL::forceScheme('https')</code> lorsque <code>APP_URL</code> est en https) ; cookies de session sécurisés.</li>
+  <li><code>TRUSTED_PROXIES</code> à renseigner uniquement si un proxy inverse est placé devant IIS.</li>
+  <li><strong>Flux de données</strong> : les résultats des requêtes sont transmis au fournisseur de l’assistant (Anthropic, OpenAI, Microsoft). Le choix des connexions exposées et des colonnes accessibles aux comptes lecteurs doit en tenir compte (données personnelles, données sensibles).</li>
+</ul>
+
+<h2 id="donnees">Modèle de données</h2>
+<p>Base MySQL de l’application (<code>mcp_server</code> par défaut), créée par <code>php artisan migrate</code>.</p>
+<table>
+  <tr><th style="width:24%">Table</th><th>Colonnes principales</th></tr>
+  <tr><td><code>users</code></td><td class="wrap"><code>id</code>, <code>name</code>, <code>email</code> (unique), <code>password</code> (nul tant que l’invitation n’est pas acceptée), <code>role</code> (<code>admin</code> | <code>user</code>), <code>status</code> (<code>invited</code> | <code>active</code> | <code>disabled</code>), <code>last_login_at</code></td></tr>
+  <tr><td><code>database_connections</code></td><td class="wrap"><code>id</code> (chaîne aléatoire de 16 caractères, utilisée dans l’URL MCP), <code>name</code>, <code>type</code> (<code>mysql</code> | <code>sqlsrv</code> | <code>pgsql</code> | <code>mongodb</code> | <code>redis</code>), <code>read_only</code>, <code>max_rows</code>, <code>config</code> (texte chiffré), <code>owner_id</code> (nul = partagée ; suppression en cascade avec le propriétaire), <code>expires_at</code>, <code>last_used_at</code></td></tr>
+  <tr><td><code>connection_user</code></td><td>Attribution des connexions partagées aux utilisateurs (<code>database_connection_id</code>, <code>user_id</code>)</td></tr>
+  <tr><td><code>invitations</code></td><td><code>user_id</code> (unique), <code>token_hash</code> (SHA-256), <code>expires_at</code></td></tr>
+  <tr><td><code>oauth_clients</code></td><td>Clients enregistrés dynamiquement (nom, adresses de retour, types d’octroi)</td></tr>
+  <tr><td><code>oauth_auth_codes</code>, <code>oauth_access_tokens</code>, <code>oauth_refresh_tokens</code></td><td>Codes et jetons émis (Passport) ; la page « Mon compte » et la révocation s’appuient sur ces tables</td></tr>
+  <tr><td><code>sessions</code>, <code>cache</code>, <code>cache_locks</code></td><td>Sessions web et cache (limitation des tentatives)</td></tr>
+  <tr><td><code>jobs</code>, <code>failed_jobs</code>…</td><td>Tables standard de Laravel (non utilisées : <code>QUEUE_CONNECTION=sync</code>)</td></tr>
+</table>
+
+<h2 id="config">Configuration</h2>
+<p>Fichier <code>.env</code> à la racine de l’application (modèle : <code>.env.example</code>). Après toute modification : <code>php artisan config:cache</code>, puis recyclage du pool IIS.</p>
+<table>
+  <tr><th style="width:34%">Variable</th><th>Rôle / valeur recommandée</th></tr>
+  <tr><td><code>APP_ENV</code> / <code>APP_DEBUG</code></td><td><code>production</code> / <code>false</code></td></tr>
+  <tr><td><code>APP_KEY</code></td><td>Générée par <code>php artisan key:generate</code>. Chiffre sessions et paramètres des connexions. <strong>À sauvegarder.</strong></td></tr>
+  <tr><td><code>APP_URL</code></td><td>Adresse publique HTTPS, sans « / » final (sert à construire les URL MCP et OAuth)</td></tr>
+  <tr><td><code>DB_HOST</code>, <code>DB_PORT</code>, <code>DB_DATABASE</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code></td><td>Base MySQL de l’application. Mot de passe entre guillemets s’il contient des espaces ou <code># $ " =</code></td></tr>
+  <tr><td><code>SESSION_SECURE_COOKIE</code></td><td><code>true</code> (HTTPS)</td></tr>
+  <tr><td><code>LOG_CHANNEL</code>, <code>LOG_LEVEL</code></td><td><code>daily</code> (14 jours), <code>warning</code></td></tr>
+  <tr><td><code>MAIL_MAILER</code>, <code>MAIL_HOST</code>, <code>MAIL_PORT</code>, <code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code>, <code>MAIL_FROM_ADDRESS</code>, <code>MAIL_FROM_NAME</code></td><td>SMTP pour les invitations (Microsoft 365 : <code>smtp.office365.com</code>:587). <code>MAIL_SCHEME=smtps</code> pour le port 465. <code>MAIL_TIMEOUT</code> : 15 s par défaut. <code>log</code> = pas d’envoi</td></tr>
+  <tr><td><code>MCP_REDIRECT_DOMAINS</code></td><td>Domaines de retour OAuth autorisés, séparés par des virgules (voir chapitre 4)</td></tr>
+  <tr><td><code>TRUSTED_PROXIES</code></td><td>Uniquement derrière un proxy inverse (ARR, répartiteur) : IP du proxy ou <code>*</code></td></tr>
+  <tr><td><code>QUEUE_CONNECTION</code>, <code>CACHE_STORE</code>, <code>SESSION_DRIVER</code></td><td><code>sync</code>, <code>database</code>, <code>database</code> (aucun service supplémentaire requis)</td></tr>
+</table>
+
+<h2 id="deploiement">Déploiement sur IIS</h2>
+<p>Déploiement <strong>manuel</strong> par paquet .zip : ni Git, ni Composer, ni Node.js sur le serveur. Procédure détaillée : <code>deploy/DEPLOIEMENT-IIS.md</code>.</p>
+
+<h3>Prérequis du serveur</h3>
+<ul>
+  <li>IIS avec la fonctionnalité <strong>CGI</strong> et le module <strong>URL Rewrite 2.1</strong>.</li>
+  <li>PHP 8.3/8.4 <strong>NTS x64</strong> + Visual C++ Redistributable ; <code>php.ini</code> avec les extensions du chapitre 2, <code>cgi.fix_pathinfo=0</code>, <code>fastcgi.impersonate=1</code>, OPcache activé.</li>
+  <li>SQL Server : <strong>ODBC Driver 18</strong> + DLL <code>php_pdo_sqlsrv</code> correspondant exactement à la version de PHP et à la variante NTS.</li>
+  <li>MySQL pour la base de l’application ; nom d’hôte public, DNS et certificat TLS ; site joignable depuis Internet.</li>
+</ul>
+
+<h3>Construction du paquet (poste de développement)</h3>
+<pre><code>powershell -ExecutionPolicy Bypass -File deploy\package.ps1</code></pre>
+<p>Le script copie le projet sans les fichiers de développement (<code>.git</code>, <code>tests</code>, <code>docs</code>, <code>.env</code>, clés, journaux), exécute <code>composer install --no-dev --optimize-autoloader --classmap-authoritative</code> et produit <code>dist\mcp-server-&lt;date&gt;-&lt;commit&gt;.zip</code> (environ 10 Mo).</p>
+
+<h3>Première installation</h3>
+<ol class="steps">
+  <li>Créer la base et le compte MySQL : <code>deploy\sql\mysql-application.sql</code> (remplacer <code>CHANGEZ-MOI</code>).</li>
+  <li>Débloquer puis extraire le .zip (ex. <code>E:\Sites\mcp-server</code>) ; copier <code>.env.example</code> en <code>.env</code> et le compléter.</li>
+  <li>Dans une invite <strong>administrateur</strong>, à la racine de l’application :
+<pre><code>php artisan key:generate --force
+php artisan migrate --force
+php artisan passport:keys
+php artisan mcp:admin admin@domaine.com --name="Administrateur"
+php artisan mcp:mail-test admin@domaine.com
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache</code></pre></li>
+  <li>Pool d’applications <code>mcp-server</code> : <strong>Aucun code managé</strong>, mode intégré, démarrage <code>AlwaysRunning</code>, délai d’inactivité 0.</li>
+  <li>Droits : lecture/exécution sur le dossier, <strong>modification</strong> sur <code>storage</code> et <code>bootstrap\cache</code> pour <code>IIS AppPool\mcp-server</code> (et pour le compte qui lance les commandes Artisan).</li>
+  <li>Site IIS : chemin physique = dossier <strong><code>public</code></strong>, liaison HTTPS avec SNI ; authentification anonyme = identité du pool.</li>
+  <li>Vérifier depuis l’extérieur : <code>/up</code>, <code>/.well-known/oauth-authorization-server</code>, page de connexion.</li>
+</ol>
+
+<h3>Installation de production</h3>
+<table>
+  <tr><th style="width:34%">Élément</th><th>Valeur</th></tr>
+  <tr><td>Adresse publique (<code>APP_URL</code>)</td><td><code>https://luxewtey.com/mcpsolid</code></td></tr>
+  <tr><td>IIS</td><td>Application <code>mcpsolid</code> sous le site <code>luxewtey.com</code> ; fichiers dans <code>E:\NOS SITES\MCPSOLID</code> (chemin physique : dossier <code>public</code>)</td></tr>
+  <tr><td>URL MCP d’une connexion</td><td><code>https://luxewtey.com/mcpsolid/mcp/&lt;identifiant&gt;</code> (affichée dans l’interface)</td></tr>
+  <tr><td>Interface d’administration</td><td><code>https://luxewtey.com/mcpsolid/login</code></td></tr>
+  <tr><td>Sonde de disponibilité</td><td><code>https://luxewtey.com/mcpsolid/up</code></td></tr>
+  <tr><td>Découverte OAuth</td><td><code>https://luxewtey.com/mcpsolid/.well-known/oauth-authorization-server</code> (émetteur <code>https://luxewtey.com/mcpsolid</code>) ; métadonnées de ressource annoncées dans l’en-tête <code>WWW-Authenticate</code> : <code>https://luxewtey.com/mcpsolid/.well-known/oauth-protected-resource/mcp/&lt;identifiant&gt;</code></td></tr>
+</table>
+<div class="warn"><p><span class="label">Installation sous un sous-chemin.</span>Certains clients appliquent la RFC 8414 à la lettre et cherchent les métadonnées à la racine du domaine : <code>https://luxewtey.com/.well-known/oauth-authorization-server/mcpsolid</code>. Le site racine <code>luxewtey.com</code> redirige actuellement cette adresse vers <code>https://luxewtey.com/mcpsolid/.well-known/oauth-authorization-server</code> : cette redirection doit être conservée lors des évolutions du site racine.</p></div>
+
+<h3>Mise à jour</h3>
+<pre><code>php artisan down
+robocopy C:\Temp\mcp-nouveau &lt;dossier du site&gt; /E /XF .env /XD storage
+php artisan migrate --force
+php artisan config:cache &amp; php artisan route:cache &amp; php artisan view:cache
+php artisan up</code></pre>
+<p><code>.env</code>, <code>storage\</code> (journaux, clés OAuth) et la base MySQL sont conservés.</p>
+
+<h2 id="exploitation">Exploitation et dépannage</h2>
+
+<h3>Tâches courantes</h3>
+<table>
+  <tr><th style="width:40%">Besoin</th><th>Commande / emplacement</th></tr>
+  <tr><td>Journaux applicatifs</td><td><code>storage\logs\laravel-AAAA-MM-JJ.log</code></td></tr>
+  <tr><td>Créer ou réparer un administrateur</td><td><code>php artisan mcp:admin email@domaine.com</code> (réactive le compte, le nomme administrateur, redéfinit le mot de passe)</td></tr>
+  <tr><td>Tester l’envoi d’e-mails</td><td><code>php artisan mcp:mail-test email@domaine.com</code></td></tr>
+  <tr><td>Purger les jetons expirés</td><td><code>php artisan passport:purge</code> (tâche planifiée hebdomadaire conseillée)</td></tr>
+  <tr><td>Maintenance</td><td><code>php artisan down</code> / <code>php artisan up</code></td></tr>
+  <tr><td>Après modification de <code>.env</code></td><td><code>php artisan config:cache</code>, puis recycler le pool</td></tr>
+</table>
+
+<h3>Sauvegardes</h3>
+<ul>
+  <li>Base MySQL <code>mcp_server</code> (sauvegarde quotidienne).</li>
+  <li>Fichier <code>.env</code>, en particulier <code>APP_KEY</code> — <strong>indispensable</strong> pour relire les paramètres des connexions.</li>
+  <li><code>storage\oauth-private.key</code> et <code>storage\oauth-public.key</code> (sans elles, les assistants doivent simplement être réautorisés).</li>
+</ul>
+
+<h3>Dépannage</h3>
+<table>
+  <tr><th style="width:36%">Symptôme</th><th>Cause et solution</th></tr>
+  <tr><td>Erreur 500.19 (IIS)</td><td>Module URL Rewrite absent : l’installer.</td></tr>
+  <tr><td>404 IIS sur <code>/login</code></td><td>Le site pointe sur la racine au lieu de <code>public</code>, ou la réécriture est inactive.</td></tr>
+  <tr><td>« No application encryption key has been specified »</td><td><code>APP_KEY</code> vide ou configuration mise en cache avant la génération de la clé : <code>config:clear</code>, <code>key:generate --force</code> (uniquement s’il n’existe encore aucune connexion), <code>config:cache</code>, recyclage du pool. Vérifier que le fichier s’appelle bien <code>.env</code> (et non <code>.env.txt</code>).</td></tr>
+  <tr><td>« The stream or file … could not be opened »</td><td>Droits d’écriture manquants sur <code>storage</code> / <code>bootstrap\cache</code> : <code>icacls … /grant "IIS AppPool\mcp-server:(OI)(CI)M"</code>.</td></tr>
+  <tr><td><code>SQLSTATE[HY000] [1045] Access denied</code></td><td>Compte ou mot de passe MySQL de l’application incorrect ; guillemets manquants dans <code>.env</code> ; compte existant créé avec un autre mot de passe (<code>ALTER USER … IDENTIFIED BY …</code>).</td></tr>
+  <tr><td>« Unable to load dynamic library pdo_sqlsrv »</td><td>DLL absente ou ne correspondant pas à la version / variante de PHP. Corriger la DLL ou commenter la ligne si SQL Server n’est pas utilisé.</td></tr>
+  <tr><td><code>could not find driver</code> au test d’une connexion</td><td>Extension PDO du type de base non chargée (<code>php -m</code>).</td></tr>
+  <tr><td>L’assistant n’arrive pas à se connecter</td><td><code>APP_URL</code> différent de l’adresse publique, site non joignable depuis Internet, ou <code>/.well-known/…</code> bloqué. Vérifier depuis l’extérieur.</td></tr>
+  <tr><td>« redirect_uris … not a permitted redirect domain »</td><td>L’adresse refusée est journalisée dans <code>storage\logs</code> (« Enregistrement OAuth refusé »). Ajouter son domaine à <code>MCP_REDIRECT_DOMAINS</code> (en reprenant la liste par défaut), puis <code>config:cache</code>.</td></tr>
+  <tr><td>Copilot Studio : « GetDynamicClientRegistrationResultAsync failed … invalid_redirect_uri »</td><td><code>MCP_REDIRECT_DOMAINS</code> personnalisé sans <code>https://global.consent.azure-apim.net</code> : l’ajouter (en reprenant la liste par défaut), <code>config:cache</code>, recycler le pool, puis recréer la connexion de l’outil.</td></tr>
+  <tr><td>Invitation : « L’e-mail n’a pas pu être envoyé »</td><td><code>mcp:mail-test</code> affiche l’erreur SMTP exacte (identifiants, port 587 bloqué, SMTP authentifié désactivé sur la boîte Microsoft 365).</td></tr>
+</table>
+
+<h2 id="dev">Développement et tests</h2>
+<h3>Poste de développement</h3>
+<pre><code>composer install
+copy .env.example .env     (APP_ENV=local, APP_DEBUG=true, APP_URL=http://127.0.0.1:8000, SESSION_SECURE_COOKIE=false, DB_*)
+php artisan key:generate
+php artisan migrate
+php artisan passport:keys
+php artisan mcp:admin vous@exemple.com
+cd public
+php -S 127.0.0.1:8000 ..\vendor\laravel\framework\src\Illuminate\Foundation\resources\server.php</code></pre>
+<p>Si l’extension <code>sodium</code> n’est pas activée (WAMP), préfixer les commandes par <code>php -d extension=sodium</code> ; désactiver Xdebug (<code>XDEBUG_MODE=off</code>).</p>
+
+<h3>Tests</h3>
+<ul>
+  <li><code>php artisan test</code> : 33 tests PHPUnit (garde-fou SQL, analyse des chaînes de connexion, contrôles d’accès, invitations et e-mails, protection OAuth du point MCP), sur SQLite en mémoire.</li>
+  <li>Validation de bout en bout réalisée avec le client OAuth du SDK MCP officiel (découverte, enregistrement, PKCE, appels d’outils, révocation) et sur les cinq moteurs de base (SQL Server, MySQL, PostgreSQL, MongoDB, Redis).</li>
+</ul>
+
+<h3>Ajouter un outil MCP</h3>
+<ol>
+  <li>Créer une classe dans <code>app/Mcp/Tools/…</code> héritant de <code>DatabaseTool</code> ; renseigner <code>$name</code>, <code>$description</code>, <code>$types</code> (bases concernées) et <code>$writes</code> (outil d’écriture).</li>
+  <li>Déclarer le schéma d’entrée et implémenter <code>handle()</code> en passant par <code>$this->run(fn () => …)</code> (sérialisation, troncature, gestion d’erreurs).</li>
+  <li>L’ajouter à <code>DatabaseServer::$tools</code> et écrire un test.</li>
+</ol>
+
+<h2 id="annexe">Annexe : routes HTTP</h2>
+<p>Chemins relatifs à l’adresse de l’application, <code>https://luxewtey.com/mcpsolid</code> (par exemple <code>https://luxewtey.com/mcpsolid/oauth/token</code>).</p>
+<table>
+  <tr><th style="width:12%">Méthode</th><th style="width:40%">Chemin</th><th>Rôle</th></tr>
+  <tr><td>POST</td><td><code>/mcp/{connection}</code></td><td>Point MCP (jeton OAuth requis)</td></tr>
+  <tr><td>GET</td><td><code>/.well-known/oauth-protected-resource/…</code></td><td>Métadonnées de la ressource</td></tr>
+  <tr><td>GET</td><td><code>/.well-known/oauth-authorization-server</code></td><td>Métadonnées du serveur d’autorisation</td></tr>
+  <tr><td>POST</td><td><code>/oauth/register</code></td><td>Enregistrement dynamique des clients</td></tr>
+  <tr><td>GET / POST / DELETE</td><td><code>/oauth/authorize</code></td><td>Consentement (approuver / refuser)</td></tr>
+  <tr><td>POST</td><td><code>/oauth/token</code></td><td>Émission et rafraîchissement des jetons</td></tr>
+  <tr><td>GET / POST</td><td><code>/login</code>, <code>/logout</code></td><td>Session de l’interface</td></tr>
+  <tr><td>GET / POST</td><td><code>/invitation/{token}</code></td><td>Activation / réinitialisation du mot de passe</td></tr>
+  <tr><td>—</td><td><code>/connections</code> (ressource), <code>/connections/test</code>, <code>/connections/{id}/users</code></td><td>Connexions, test, attribution (admin)</td></tr>
+  <tr><td>—</td><td><code>/account</code>, <code>/account/password</code>, <code>/account/assistants/{client}</code></td><td>Compte, mot de passe, révocation d’un assistant</td></tr>
+  <tr><td>—</td><td><code>/users</code>, <code>/users/{id}</code>, <code>/users/{id}/invitation</code>, <code>/users/{id}/assistants</code></td><td>Gestion des comptes (admin)</td></tr>
+  <tr><td>GET</td><td><code>/up</code></td><td>Sonde de disponibilité</td></tr>
+</table>
+
+</main>
+</body>
+</html>
